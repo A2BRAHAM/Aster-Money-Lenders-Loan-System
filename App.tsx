@@ -124,7 +124,11 @@ const App: React.FC = () => {
             <Investments onInvestClick={() => openAuth('login', 'customer', true)} />
             <FollowUs />
             <Contact />
-            <Footer onLoginClick={() => openAuth('login', 'customer', false)} user={user} />
+            <Footer 
+              onLoginClick={() => openAuth('login', 'customer', false)} 
+              onApplyClick={() => openAuth('login', 'customer', true)}
+              user={user} 
+            />
           </div>
         )}
       </main>

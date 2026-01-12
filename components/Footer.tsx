@@ -6,10 +6,11 @@ import { supabase } from '../lib/supabase';
 
 interface FooterProps {
   onLoginClick: () => void;
+  onApplyClick: () => void;
   user: any;
 }
 
-const Footer: React.FC<FooterProps> = ({ onLoginClick, user }) => {
+const Footer: React.FC<FooterProps> = ({ onLoginClick, onApplyClick, user }) => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -56,8 +57,8 @@ const Footer: React.FC<FooterProps> = ({ onLoginClick, user }) => {
               <span className="absolute bottom-0 left-0 w-1/2 h-0.5 bg-amber-500 rounded-full"></span>
             </h4>
             <ul className="space-y-4 text-slate-400 text-sm font-medium">
-              <li><a href="#products" className="hover:text-amber-500 transition-colors">Apply for a Loan</a></li>
-              <li><a href="#investments" className="hover:text-amber-500 transition-colors">Invest With Us</a></li>
+              <li><button onClick={onApplyClick} className="hover:text-amber-500 transition-colors">Apply for a Loan</button></li>
+              <li><button onClick={onApplyClick} className="hover:text-amber-500 transition-colors">Invest With Us</button></li>
               <li><a href="#products" className="hover:text-amber-500 transition-colors">Business Financing</a></li>
               <li><a href="#products" className="hover:text-amber-500 transition-colors">Personal Wealth</a></li>
               <li><a href="#contact" className="hover:text-amber-500 transition-colors">Debt Consulting</a></li>
@@ -70,7 +71,10 @@ const Footer: React.FC<FooterProps> = ({ onLoginClick, user }) => {
               <span className="absolute bottom-0 left-0 w-1/2 h-0.5 bg-amber-500 rounded-full"></span>
             </h4>
             <div className="space-y-4">
-              <button className={`w-full py-4 font-bold text-white rounded-xl shadow-lg transition-all ${BRAND_COLORS.primaryBg} ${BRAND_COLORS.primaryHover}`}>
+              <button 
+                onClick={onApplyClick}
+                className={`w-full py-4 font-bold text-white rounded-xl shadow-lg transition-all ${BRAND_COLORS.primaryBg} ${BRAND_COLORS.primaryHover}`}
+              >
                 Apply for a Loan
               </button>
               {user ? (

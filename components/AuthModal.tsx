@@ -115,7 +115,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
         
         <div className="text-center mb-6">
           <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-6">
-            {mode === 'login' ? `Login as ${isRoleLocked ? 'Customer' : 'User'}` : mode === 'signup' ? 'Create an account' : 'Reset Password'}
+            {mode === 'login' ? 'Login' : mode === 'signup' ? 'Create an account' : 'Reset Password'}
           </h2>
 
           {/* Role Selection Segmented Control - Only visible if not locked */}
@@ -206,7 +206,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
               className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-[0.98] ${role === 'employer' ? BRAND_COLORS.primaryBg : BRAND_COLORS.secondaryBg} hover:opacity-90 disabled:opacity-50`}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>
-                {mode === 'login' ? `Login as ${role}` : mode === 'signup' ? 'Get Started' : 'Reset'}
+                {mode === 'login' ? 'Login' : mode === 'signup' ? 'Get Started' : 'Reset'}
               </span>}
             </button>
           </div>
