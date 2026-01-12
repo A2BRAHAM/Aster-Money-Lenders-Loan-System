@@ -23,6 +23,8 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
   };
 
   const isNavSolid = isScrolled || view === 'dashboard';
+  const userRole = user?.user_metadata?.role || 'customer';
+  const isEmployee = userRole === 'employer';
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
@@ -30,14 +32,12 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo Section */}
           <button onClick={() => onSetView('landing')} className="flex items-center group relative z-10">
             <Logo 
               className={`transform transition-all duration-500 origin-left ${isNavSolid ? 'scale-90' : 'scale-100'}`}
             />
           </button>
 
-          {/* Joined Desktop Navigation Items */}
           <div className="hidden md:flex items-center space-x-6">
             {view === 'landing' && (
               <div className="flex items-center">
@@ -61,9 +61,9 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
                     className="flex items-center space-x-3 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all bg-white/10 text-white hover:bg-white/20"
                   >
                     {view === 'landing' ? (
-                      <><LayoutDashboard className="w-4 h-4 text-cyan-400" /><span>Dashboard</span></>
+                      <><LayoutDashboard className={`w-4 h-4 ${isEmployee ? 'text-cyan-400' : 'text-amber-400'}`} /><span>Portal</span></>
                     ) : (
-                      <><Home className="w-4 h-4 text-amber-400" /><span>Home</span></>
+                      <><Home className="w-4 h-4 text-slate-400" /><span>Home</span></>
                     )}
                   </button>
                   <button 
@@ -93,7 +93,6 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
             </div>
           </div>
 
-          {/* Mobile menu button */}
           <div className="md:hidden relative z-10">
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -105,7 +104,6 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
         </div>
       </div>
 
-      {/* Mobile Menu Panel */}
       <div className={`md:hidden transition-all duration-500 ease-in-out absolute w-full left-0 ${
         isOpen ? 'top-full opacity-100 bg-slate-950/95 backdrop-blur-2xl border-b border-white/5' : 'top-[-500%] opacity-0 pointer-events-none'
       }`}>
@@ -131,8 +129,8 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
                   onClick={() => { onSetView(view === 'landing' ? 'dashboard' : 'landing'); setIsOpen(false); }}
                   className="py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white bg-white/10 flex flex-col items-center justify-center space-y-2"
                 >
-                  {view === 'landing' ? <LayoutDashboard className="w-6 h-6 text-cyan-400" /> : <Home className="w-6 h-6 text-amber-400" />}
-                  <span>{view === 'landing' ? 'Dashboard' : 'Portal Home'}</span>
+                  {view === 'landing' ? <LayoutDashboard className={`w-6 h-6 ${isEmployee ? 'text-cyan-400' : 'text-amber-400'}`} /> : <Home className="w-6 h-6 text-slate-400" />}
+                  <span>{view === 'landing' ? 'Portal' : 'Home'}</span>
                 </button>
                 <button 
                   onClick={handleLogout}
@@ -154,7 +152,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
                    onClick={() => { onApplyClick(); setIsOpen(false); }}
                    className={`py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white shadow-2xl ${BRAND_COLORS.secondaryBg}`}
                  >
-                   Start Loan Application
+                   Apply Now
                  </button>
               </div>
             )}

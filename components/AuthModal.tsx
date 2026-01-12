@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Mail, Lock, User, Loader2, Eye, EyeOff,
-  Facebook, Instagram, Twitter, Linkedin
+  Facebook, Instagram, Twitter, Linkedin, Briefcase, UserCircle, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { BRAND_COLORS } from '../constants';
@@ -12,15 +12,18 @@ interface AuthModalProps {
   onClose: () => void;
   initialMode?: 'login' | 'signup' | 'reset';
   targetRole?: 'customer' | 'employer';
+  isRoleLocked?: boolean;
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ 
   isOpen, 
   onClose, 
   initialMode = 'login',
-  targetRole = 'employer' 
+  targetRole: defaultTargetRole = 'customer',
+  isRoleLocked = false
 }) => {
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>(initialMode);
+  const [role, setRole] = useState<'customer' | 'employer'>(defaultTargetRole);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,9 +35,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   useEffect(() => {
     setMode(initialMode);
+    setRole(defaultTargetRole);
     setError(null);
     setSuccess(null);
-  }, [initialMode, isOpen]);
+  }, [initialMode, isOpen, defaultTargetRole]);
 
   if (!isOpen) return null;
 
@@ -68,7 +72,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
           email,
           password,
           options: {
-            data: { full_name: fullName, role: targetRole }
+            data: { full_name: fullName, role: role }
           }
         });
         if (signUpError) throw signUpError;
@@ -105,17 +109,36 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-50/95 backdrop-blur-md animate-fade-in">
-      {/* Click outside to close */}
       <div className="absolute inset-0" onClick={onClose}></div>
       
-      {/* Login Card */}
       <div className="relative w-full max-w-[350px] bg-white rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-slate-100 px-8 py-10 animate-fade-in-up">
         
-        {/* Header Section - No Icon as requested */}
-        <div className="text-center mb-8">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            {mode === 'login' ? 'Login Here' : mode === 'signup' ? 'Create an account' : 'Reset Password'}
+        <div className="text-center mb-6">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-6">
+            {mode === 'login' ? `Login as ${isRoleLocked ? 'Customer' : 'User'}` : mode === 'signup' ? 'Create an account' : 'Reset Password'}
           </h2>
+
+          {/* Role Selection Segmented Control - Only visible if not locked */}
+          {!isRoleLocked && (
+            <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
+              <button 
+                type="button"
+                onClick={() => setRole('customer')}
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${role === 'customer' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <UserCircle className="w-4 h-4" />
+                <span>Customer</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setRole('employer')}
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${role === 'employer' ? 'bg-white text-cyan-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Briefcase className="w-4 h-4" />
+                <span>Employee</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -180,10 +203,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
           <div className="pt-2">
             <button
               type="submit" disabled={loading}
-              className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-[0.98] ${BRAND_COLORS.secondaryBg} ${BRAND_COLORS.secondaryHover} disabled:opacity-50`}
+              className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-[0.98] ${role === 'employer' ? BRAND_COLORS.primaryBg : BRAND_COLORS.secondaryBg} hover:opacity-90 disabled:opacity-50`}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>
-                {mode === 'login' ? 'Login' : mode === 'signup' ? 'Get Started' : 'Reset'}
+                {mode === 'login' ? `Login as ${role}` : mode === 'signup' ? 'Get Started' : 'Reset'}
               </span>}
             </button>
           </div>
@@ -226,6 +249,17 @@ const AuthModal: React.FC<AuthModalProps> = ({
               <SocialIcon icon={Twitter} label="Twitter" />
               <SocialIcon icon={Linkedin} label="LinkedIn" />
             </div>
+          </div>
+          
+          {/* Explicit Back to home button as requested */}
+          <div className="mt-8 text-center">
+            <button 
+              onClick={onClose}
+              className="inline-flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 hover:text-slate-500 transition-all group"
+            >
+              <ArrowLeft className="w-3 h-3 transition-transform group-hover:-translate-x-1" />
+              <span>Back to home</span>
+            </button>
           </div>
         </div>
       </div>

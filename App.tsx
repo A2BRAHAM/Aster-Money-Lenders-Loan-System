@@ -18,12 +18,14 @@ const App: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [authConfig, setAuthConfig] = useState<{
     isOpen: boolean;
-    mode: 'login' | 'signup';
+    mode: 'login' | 'signup' | 'reset';
     role: 'customer' | 'employer';
+    isRoleLocked: boolean;
   }>({
     isOpen: false,
     mode: 'login',
-    role: 'employer'
+    role: 'customer',
+    isRoleLocked: false
   });
   
   const [user, setUser] = useState<any>(null);
@@ -34,6 +36,14 @@ const App: React.FC = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Handle browser back button to close modal
+    const handlePopState = () => {
+      if (authConfig.isOpen) {
+        setAuthConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
 
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -55,9 +65,10 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('popstate', handlePopState);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authConfig.isOpen]);
 
   useEffect(() => {
     if (authConfig.isOpen) {
@@ -67,19 +78,31 @@ const App: React.FC = () => {
     }
   }, [authConfig.isOpen]);
 
-  // Changed default mode to 'login' even for customers as per request
-  const openAuth = (mode: 'login' | 'signup' = 'login', role: 'customer' | 'employer' = 'employer') => {
-    setAuthConfig({ isOpen: true, mode, role });
+  const openAuth = (
+    mode: 'login' | 'signup' | 'reset' = 'login', 
+    role: 'customer' | 'employer' = 'customer',
+    isRoleLocked: boolean = false
+  ) => {
+    // Push state so back button works
+    window.history.pushState({ modal: true }, '');
+    setAuthConfig({ isOpen: true, mode, role, isRoleLocked });
   };
 
-  const closeAuth = () => setAuthConfig({ ...authConfig, isOpen: false });
+  const closeAuth = () => {
+    // If we're closing via UI, we might want to go back in history if we pushed state
+    if (window.history.state?.modal) {
+      window.history.back();
+    } else {
+      setAuthConfig({ ...authConfig, isOpen: false });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <Navbar 
         isScrolled={isScrolled} 
-        onLoginClick={() => openAuth('login', 'employer')} 
-        onApplyClick={() => openAuth('login', 'customer')}
+        onLoginClick={() => openAuth('login', 'customer', false)} // Login allows role choice
+        onApplyClick={() => openAuth('login', 'customer', true)}  // Apply forces Customer role
         user={user}
         view={view}
         onSetView={setView}
@@ -91,17 +114,17 @@ const App: React.FC = () => {
         ) : (
           <div className={authConfig.isOpen ? 'hidden' : 'block'}>
             <Hero 
-              onApplyClick={() => openAuth('login', 'customer')} 
-              onInvestClick={() => openAuth('login', 'customer')}
+              onApplyClick={() => openAuth('login', 'customer', true)} 
+              onInvestClick={() => openAuth('login', 'customer', true)}
             />
             <Products />
             <Services />
             <About />
             <WhyChooseUs />
-            <Investments onInvestClick={() => openAuth('login', 'customer')} />
+            <Investments onInvestClick={() => openAuth('login', 'customer', true)} />
             <FollowUs />
             <Contact />
-            <Footer onLoginClick={() => openAuth('login', 'employer')} user={user} />
+            <Footer onLoginClick={() => openAuth('login', 'customer', false)} user={user} />
           </div>
         )}
       </main>
@@ -112,6 +135,7 @@ const App: React.FC = () => {
           onClose={closeAuth} 
           initialMode={authConfig.mode}
           targetRole={authConfig.role}
+          isRoleLocked={authConfig.isRoleLocked}
         />
       )}
     </div>

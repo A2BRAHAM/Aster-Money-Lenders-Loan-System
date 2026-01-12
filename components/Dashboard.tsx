@@ -16,7 +16,10 @@ import {
   FileText,
   Users,
   Check,
-  Ban
+  Ban,
+  Wallet,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { BRAND_COLORS } from '../constants';
@@ -33,7 +36,7 @@ interface Application {
   purpose: string;
   status: string;
   created_at: string;
-  user_email?: string; // Only for employers
+  user_email?: string;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
@@ -43,11 +46,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Detect role from metadata
   const userRole = user.user_metadata?.role || 'customer';
   const isEmployer = userRole === 'employer';
 
-  // Form State
   const [formData, setFormData] = useState({
     amount: '',
     loan_type: 'Personal Loan',
@@ -56,20 +57,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const fetchApplications = async () => {
     setLoading(true);
-    let query = supabase
-      .from('loan_applications')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let query = supabase.from('loan_applications').select('*');
     
-    // If employer, we might want to join user data, but for simplicity we show raw data
-    // In a real app, you'd fetch user emails from profiles table
+    // Customers only see their own
+    if (!isEmployer) {
+      query = query.eq('user_id', user.id);
+    }
     
-    const { data, error } = await query;
+    const { data, error } = await query.order('created_at', { ascending: false });
     
     if (!error && data) setApplications(data);
     setLoading(false);
 
-    // Auto-open form for new customers with no entries
     if (!isEmployer && data && data.length === 0) {
       setIsFormOpen(true);
     }
@@ -77,7 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   useEffect(() => {
     fetchApplications();
-  }, []);
+  }, [isEmployer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,39 +159,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     <div className="pt-24 pb-12 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
           <div>
             <h1 className="text-3xl font-serif font-bold text-slate-900">
-              {isEmployer ? 'Employer Portal' : 'Customer Portal'}
+              {isEmployer ? 'Loan Management System' : 'Your Financial Portal'}
             </h1>
             <p className="text-slate-500 font-medium">
-              Logged in as <span className="text-cyan-600 font-bold capitalize">{userRole}</span> • {user.email}
+              Logged in as <span className={`font-bold capitalize ${isEmployer ? 'text-cyan-600' : 'text-amber-600'}`}>{userRole}</span> • {user.email}
             </p>
           </div>
           
           {!isEmployer && (
             <button 
               onClick={() => { setIsFormOpen(true); setEditingId(null); setFormData({ amount: '', loan_type: 'Personal Loan', purpose: '' }); }}
-              className={`flex items-center space-x-2 px-6 py-3 rounded-xl text-white font-bold shadow-lg transition-transform hover:scale-105 ${BRAND_COLORS.primaryBg}`}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-xl text-white font-bold shadow-lg transition-transform hover:scale-105 ${BRAND_COLORS.secondaryBg}`}
             >
               <Plus className="w-5 h-5" />
-              <span>New Loan Entry</span>
+              <span>Apply for a Loan</span>
             </button>
           )}
         </div>
 
-        {/* Stats Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-4">
-            <div className="bg-cyan-50 p-3 rounded-xl text-cyan-600">
-              {isEmployer ? <Users className="w-6 h-6"/> : <TrendingUp className="w-6 h-6"/>}
+            <div className={`p-3 rounded-xl ${isEmployer ? 'bg-cyan-50 text-cyan-600' : 'bg-amber-50 text-amber-600'}`}>
+              {isEmployer ? <Users className="w-6 h-6"/> : <Wallet className="w-6 h-6"/>}
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                {isEmployer ? 'Total Applications' : 'Your Entries'}
+                {isEmployer ? 'Total Submissions' : 'Active Balance'}
               </p>
-              <p className="text-2xl font-black text-slate-900">{applications.length}</p>
+              <p className="text-2xl font-black text-slate-900">
+                {isEmployer ? applications.length : `K ${(applications.filter(a => a.status === 'Approved').reduce((acc, curr) => acc + curr.amount, 0) * 1.1).toLocaleString()}`}
+              </p>
             </div>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-4">
@@ -207,7 +206,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-4">
             <div className="bg-green-50 p-3 rounded-xl text-green-600"><CheckCircle className="w-6 h-6"/></div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Approved Volume</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{isEmployer ? 'Disbursed Capital' : 'Approved Loans'}</p>
               <p className="text-2xl font-black text-slate-900">
                 K {applications.filter(a => a.status === 'Approved').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
               </p>
@@ -215,13 +214,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* List View */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-hidden">
           <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
              <h2 className="text-xl font-bold text-slate-900">
-               {isEmployer ? 'Global Entries' : 'Your Loan History'}
+               {isEmployer ? 'Inbound Loan Queue' : 'My Loan History'}
              </h2>
-             <button onClick={fetchApplications} className="text-cyan-600 hover:text-cyan-700 text-sm font-bold">Refresh Feed</button>
+             <button onClick={fetchApplications} className="text-slate-400 hover:text-slate-600 text-sm font-bold">Refresh Feed</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -244,7 +242,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 ) : applications.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-medium">
-                      No applications currently in system.
+                      No records found in this view.
                     </td>
                   </tr>
                 ) : (
@@ -289,18 +287,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                               </>
                             ) : (
                               <>
-                                <button 
-                                  onClick={() => handleEdit(app)}
-                                  className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all"
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={() => handleDelete(app.id)}
-                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {app.status === 'Pending' && (
+                                  <>
+                                    <button 
+                                      onClick={() => handleEdit(app)}
+                                      className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all"
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDelete(app.id)}
+                                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                          </div>
@@ -312,14 +314,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             </table>
           </div>
         </div>
+
+        {/* Exclusive Customer Tools */}
+        {!isEmployer && (
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden group">
+               <TrendingUp className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
+               <h3 className="text-2xl font-serif font-bold mb-4">Investment Portal</h3>
+               <p className="text-amber-50/80 mb-6 font-medium">Earn up to 14.2% interest by investing with Aster Money Lenders. Secure your future with our certified portfolios.</p>
+               <button className="px-6 py-3 bg-white text-amber-600 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-amber-50 transition-colors">
+                 Manage Investments
+               </button>
+            </div>
+            <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden group border border-white/5">
+               <ShieldCheck className="absolute -right-4 -bottom-4 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
+               <h3 className="text-2xl font-serif font-bold mb-4">Credit Consultation</h3>
+               <p className="text-slate-400 mb-6 font-medium">Get a free consultation with our credit experts to optimize your financial strategy and increase your loan eligibility.</p>
+               <button className="px-6 py-3 bg-white/10 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-white/20 transition-colors border border-white/10">
+                 Book Consultation
+               </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Customer Entry Form Modal */}
       {isFormOpen && !isEmployer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-fade-in-up">
-            <div className={`p-6 flex justify-between items-center text-white ${BRAND_COLORS.primaryBg}`}>
-              <h2 className="text-2xl font-bold">{editingId ? 'Edit Entry' : 'Fill Loan Form'}</h2>
+            <div className={`p-6 flex justify-between items-center text-white ${BRAND_COLORS.secondaryBg}`}>
+              <h2 className="text-2xl font-bold">{editingId ? 'Edit Entry' : 'Loan Application'}</h2>
               <button onClick={() => setIsFormOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                 <X className="w-6 h-6" />
               </button>
@@ -335,7 +358,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   required
                   value={formData.amount}
                   onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-cyan-600 outline-none" 
+                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none" 
                   placeholder="5000"
                 />
               </div>
@@ -345,7 +368,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   <Briefcase className="w-4 h-4 mr-1 text-slate-400" /> Loan Type
                 </label>
                 <select 
-                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-cyan-600 outline-none"
+                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
                   value={formData.loan_type}
                   onChange={(e) => setFormData({...formData, loan_type: e.target.value})}
                 >
@@ -365,17 +388,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   required
                   value={formData.purpose}
                   onChange={(e) => setFormData({...formData, purpose: e.target.value})}
-                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-cyan-600 outline-none"
-                  placeholder="E.g. Business expansion..."
+                  className="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
+                  placeholder="E.g. Medical bills, Business stock..."
                 ></textarea>
               </div>
 
               <button 
                 type="submit"
                 disabled={formLoading}
-                className={`w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 ${BRAND_COLORS.primaryBg} hover:opacity-95 disabled:opacity-50`}
+                className={`w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 ${BRAND_COLORS.secondaryBg} hover:opacity-95 disabled:opacity-50`}
               >
-                {formLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>{editingId ? 'Update Entry' : 'Submit Loan Application'}</span>}
+                {formLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>{editingId ? 'Update Application' : 'Submit Loan Entry'}</span>}
               </button>
             </form>
           </div>
