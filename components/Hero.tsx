@@ -24,7 +24,7 @@ const Hero: React.FC<HeroProps> = ({ onApplyClick, onInvestClick }) => {
             {/* Removed Licensed & Trusted Badge */}
             
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-8 leading-[1.05] tracking-tight">
-              Fast, Secure <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500 italic">Financial Power</span>
+              Fast, Secure <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500">Financial Power</span>
             </h1>
             
             <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto lg:mx-0 leading-relaxed font-light">
@@ -48,7 +48,7 @@ const Hero: React.FC<HeroProps> = ({ onApplyClick, onInvestClick }) => {
 
             <div className="mt-20 flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-4 sm:space-y-0 sm:space-x-10 opacity-60">
               <div className="text-white text-[10px] font-black tracking-[0.4em] uppercase">Trusted Partners</div>
-              <div className="flex items-center space-x-8 text-white font-serif text-xl italic opacity-80">
+              <div className="flex items-center space-x-8 text-white font-serif text-xl opacity-80">
                 <span>Goal Getters Cooperative</span>
                 <span className="w-1 h-1 bg-white rounded-full"></span>
                 <span>Aster Nations Fund</span>
