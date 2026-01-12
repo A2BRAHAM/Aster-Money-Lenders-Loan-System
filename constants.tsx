@@ -40,8 +40,6 @@ export const NAV_LINKS = [
   { label: 'Home', href: '#' },
   { label: 'Products', href: '#products' },
   { label: 'Services', href: '#services' },
-  { label: 'Investments', href: '#investments' },
-  { label: 'Who We Are', href: '#about' },
   { label: 'Contact Us', href: '#contact' },
 ];
 

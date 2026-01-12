@@ -38,14 +38,14 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
           </button>
 
           {/* Joined Desktop Navigation Items */}
-          <div className="hidden md:flex items-center">
+          <div className="hidden md:flex items-center space-x-6">
             {view === 'landing' && (
-              <div className="flex items-center bg-white/5 backdrop-blur-md rounded-2xl px-2 py-1.5 border border-white/5 mr-8 shadow-inner">
+              <div className="flex items-center">
                 {NAV_LINKS.map((link) => (
                   <a
                     key={link.label}
                     href={link.href}
-                    className="px-5 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 hover:text-amber-500 transition-all rounded-xl hover:bg-white/5"
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 hover:text-amber-500 transition-all"
                   >
                     {link.label}
                   </a>
@@ -53,7 +53,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
               </div>
             )}
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               {user ? (
                 <div className="flex items-center bg-slate-900/50 backdrop-blur-md rounded-2xl p-1 border border-white/10">
                   <button 
@@ -75,7 +75,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <button 
                     onClick={onLoginClick}
                     className="px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all border border-white/20 text-white hover:bg-white/10"
