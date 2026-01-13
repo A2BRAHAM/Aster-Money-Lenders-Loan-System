@@ -5,10 +5,10 @@ import {
   Facebook, Instagram, Twitter, Linkedin, Briefcase, UserCircle, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BRAND_COLORS } from '../constants';
 
 interface AuthModalProps {
   isOpen: boolean;
+  // Fix: changed onClose type from void to () => void as it is used as a function
   onClose: () => void;
   initialMode?: 'login' | 'signup' | 'reset';
   targetRole?: 'customer' | 'employer';
@@ -38,60 +38,43 @@ const AuthModal: React.FC<AuthModalProps> = ({
     setRole(defaultTargetRole);
     setError(null);
     setSuccess(null);
+    setConfirmPassword('');
   }, [initialMode, isOpen, defaultTargetRole]);
 
   if (!isOpen) return null;
 
-  const validatePassword = (pass: string) => {
-    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
-    return regex.test(pass);
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (mode === 'signup' && password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
-
-    if (mode === 'signup') {
-      if (!validatePassword(password)) {
-        setError('Password must be 8+ chars (Upper, Lower, Number, Special).');
-        setLoading(false);
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError('Passwords do not match.');
-        setLoading(false);
-        return;
-      }
-    }
 
     try {
       if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            data: { full_name: fullName, role: role }
-          }
+          options: { data: { full_name: fullName, role: role } }
         });
         if (signUpError) throw signUpError;
-        setSuccess(`Account created! Verify email, then login.`);
-        setTimeout(() => setMode('login'), 2500);
+        setSuccess(`Verification link sent to your email.`);
       } else if (mode === 'login') {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
         onClose();
       } else if (mode === 'reset') {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
         if (resetError) throw resetError;
-        setSuccess('Recovery link sent to email.');
+        setSuccess('Recovery link sent.');
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed.');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -100,167 +83,166 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const SocialIcon = ({ icon: Icon, label }: { icon: any, label: string }) => (
     <button 
       type="button"
-      className="group flex items-center justify-center w-10 h-10 rounded-full border border-slate-100 bg-white transition-all hover:bg-amber-500 hover:border-amber-500 shadow-sm"
+      className="group flex items-center justify-center w-8 h-8 rounded-full border border-red-600 bg-white hover:bg-red-600 transition-all shadow-sm"
       aria-label={label}
     >
-      <Icon className="w-4 h-4 text-slate-400 transition-colors group-hover:text-white" />
+      <Icon className="w-3.5 h-3.5 text-red-600 group-hover:text-white" />
     </button>
   );
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-50/95 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div className="absolute inset-0" onClick={onClose}></div>
       
-      <div className="relative w-full max-w-[350px] bg-white rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-slate-100 px-8 py-10 animate-fade-in-up">
+      <div className="relative w-full max-w-[360px] bg-white rounded-[2rem] shadow-2xl border border-black px-8 py-8 animate-fade-in-up flex flex-col justify-center">
         
         <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-6">
-            {mode === 'login' ? 'Login' : mode === 'signup' ? 'Create an account' : 'Reset Password'}
+          <h2 className="text-xl font-serif font-bold text-black mb-4 tracking-tight">
+            {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Sign up' : 'Account recovery'}
           </h2>
 
-          {/* Role Selection Segmented Control - Only visible if not locked */}
-          {!isRoleLocked && (
-            <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
+          {!isRoleLocked && mode !== 'reset' && (
+            <div className="flex p-1 bg-white border border-black rounded-xl">
               <button 
                 type="button"
                 onClick={() => setRole('customer')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${role === 'customer' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`flex-1 flex items-center justify-center space-x-1 py-1.5 rounded-lg text-[10px] font-bold tracking-tight transition-all ${role === 'customer' ? 'bg-red-600 text-white shadow-sm' : 'text-black'}`}
               >
-                <UserCircle className="w-4 h-4" />
+                <UserCircle className="w-3 h-3" />
                 <span>Customer</span>
               </button>
               <button 
                 type="button"
                 onClick={() => setRole('employer')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${role === 'employer' ? 'bg-white text-cyan-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`flex-1 flex items-center justify-center space-x-1 py-1.5 rounded-lg text-[10px] font-bold tracking-tight transition-all ${role === 'employer' ? 'bg-red-600 text-white shadow-sm' : 'text-black'}`}
               >
-                <Briefcase className="w-4 h-4" />
+                <Briefcase className="w-3 h-3" />
                 <span>Employee</span>
               </button>
             </div>
           )}
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold text-center animate-shake">
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 text-green-600 rounded-xl text-[10px] font-bold text-center">
-            {success}
-          </div>
-        )}
+        {error && <div className="mb-4 p-2 bg-white border border-red-600 text-red-600 rounded-lg text-[10px] font-bold text-center">{error}</div>}
+        {success && <div className="mb-4 p-2 bg-white border border-red-600 text-red-600 rounded-lg text-[10px] font-bold text-center">{success}</div>}
 
-        <form onSubmit={handleAuth} className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-2">
           {mode === 'signup' && (
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-amber-500 transition-colors">
-                <User className="w-4 h-4" />
-              </div>
-              <input
-                type="text" required value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-100 pl-11 pr-4 py-3 rounded-xl text-slate-900 outline-none focus:bg-white focus:border-amber-500 transition-all text-sm font-medium placeholder-slate-300"
-                placeholder="Full Name"
-              />
-            </div>
+            <input
+              type="text" required value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+              placeholder="Full name"
+            />
           )}
 
-          <div className="relative group">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-amber-500 transition-colors">
-              <Mail className="w-4 h-4" />
-            </div>
-            <input
-              type="email" required value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-100 pl-11 pr-4 py-3 rounded-xl text-slate-900 outline-none focus:bg-white focus:border-amber-500 transition-all text-sm font-medium placeholder-slate-300"
-              placeholder="Email address"
-            />
-          </div>
+          <input
+            type="email" required value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+            placeholder="Email address"
+          />
 
           {mode !== 'reset' && (
             <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-amber-500 transition-colors">
-                <Lock className="w-4 h-4" />
-              </div>
               <input
                 type={showPassword ? 'text' : 'password'} required value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-100 pl-11 pr-11 py-3 rounded-xl text-slate-900 outline-none focus:bg-white focus:border-amber-500 transition-all text-sm font-medium placeholder-slate-300"
+                className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
                 placeholder="Password"
               />
               <button 
                 type="button" onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-red-600"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           )}
 
-          <div className="pt-2">
-            <button
-              type="submit" disabled={loading}
-              className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-[0.98] ${role === 'employer' ? BRAND_COLORS.primaryBg : BRAND_COLORS.secondaryBg} hover:opacity-90 disabled:opacity-50`}
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>
-                {mode === 'login' ? 'Login' : mode === 'signup' ? 'Get Started' : 'Reset'}
-              </span>}
-            </button>
-          </div>
-
-          {mode === 'login' && (
-            <div className="text-center pt-0.5">
-              <button 
-                type="button" onClick={() => setMode('reset')}
-                className="text-[11px] text-slate-400 hover:text-amber-600 font-bold transition-colors"
-              >
-                forgot password?
-              </button>
+          {mode === 'signup' && (
+            <div className="relative group">
+              <input
+                type={showPassword ? 'text' : 'password'} required value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+                placeholder="Repeat password"
+              />
             </div>
           )}
+
+          {mode === 'login' && (
+            <button 
+              type="button"
+              onClick={() => setMode('reset')}
+              className="block w-full text-right pr-2 text-[10px] text-red-600 hover:underline"
+            >
+              Reset password
+            </button>
+          )}
+
+          <div className="pt-2 space-y-2">
+            <button
+              type="submit" disabled={loading}
+              className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-red-600 bg-red-600 text-white hover:bg-black hover:border-black active:scale-95 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-white" /> : (
+                mode === 'login' ? 'Proceed to account' : mode === 'signup' ? 'Create account' : 'Request link'
+              )}
+            </button>
+
+            {mode === 'login' && (
+              <button
+                type="button"
+                className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-black bg-white text-black hover:bg-black hover:text-white flex items-center justify-center space-x-2"
+              >
+                <div className="w-4 h-4 flex items-center justify-center font-black border border-current rounded-sm text-[8px]">G</div>
+                <span>Continue with google</span>
+              </button>
+            )}
+          </div>
         </form>
 
-        <div className="mt-8 pt-8 border-t border-slate-50">
-          <div className="text-center mb-6">
-            <div className="relative flex items-center justify-center mb-4">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-50"></div></div>
-              <span className="relative px-3 text-slate-200 text-[10px] font-black uppercase tracking-widest bg-white">or</span>
-            </div>
-            
-            <button
-              onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-              className="text-[11px] text-amber-600 hover:text-amber-700 font-black uppercase tracking-widest transition-colors"
-            >
-              {mode === 'login' ? 'Create an account' : 'Back to login'}
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div className="text-center">
-              <span className="text-slate-400 text-[11px] font-medium">login with</span>
-            </div>
-            <div className="flex items-center justify-center gap-3">
-              <SocialIcon icon={Mail} label="Google" />
-              <SocialIcon icon={Facebook} label="Facebook" />
-              <SocialIcon icon={Instagram} label="Instagram" />
-              <SocialIcon icon={Twitter} label="Twitter" />
-              <SocialIcon icon={Linkedin} label="LinkedIn" />
-            </div>
+        <div className="mt-6 pt-4 border-t border-red-600 text-center">
+          <div className="text-[10px] text-black font-bold">
+            {mode === 'login' ? (
+              <>
+                Don’t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => setMode('signup')}
+                  className="text-red-600 hover:underline transition-all"
+                >
+                  Sign up here.
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => setMode('login')}
+                  className="text-red-600 hover:underline transition-all"
+                >
+                  Login
+                </button>
+              </>
+            )}
           </div>
           
-          {/* Explicit Back to home button as requested */}
-          <div className="mt-8 text-center">
-            <button 
-              onClick={onClose}
-              className="inline-flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 hover:text-slate-500 transition-all group"
-            >
-              <ArrowLeft className="w-3 h-3 transition-transform group-hover:-translate-x-1" />
-              <span>Back to home</span>
-            </button>
+          <div className="mt-4 flex items-center justify-center gap-3">
+             <SocialIcon icon={Facebook} label="Facebook" />
+             <SocialIcon icon={Linkedin} label="LinkedIn" />
+             <SocialIcon icon={Instagram} label="Instagram" />
           </div>
+
+          <button 
+            onClick={onClose}
+            className="mt-6 inline-flex items-center space-x-1 text-[10px] font-bold text-red-600 hover:opacity-80 transition-opacity"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <span>Return home</span>
+          </button>
         </div>
       </div>
     </div>

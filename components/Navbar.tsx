@@ -1,20 +1,19 @@
 
 import React, { useState } from 'react';
-import { Menu, X, LogOut, Home, LayoutDashboard } from 'lucide-react';
-import { NAV_LINKS, BRAND_COLORS } from '../constants';
-import Logo from './Logo';
+import { Menu, X, LogOut } from 'lucide-react';
+import { BRAND_COLORS } from '../constants';
 import { supabase } from '../lib/supabase';
+import { AppView } from '../App';
 
 interface NavbarProps {
   isScrolled: boolean;
   onLoginClick: () => void;
-  onApplyClick: () => void;
   user: any;
-  view: 'landing' | 'dashboard';
-  onSetView: (view: 'landing' | 'dashboard') => void;
+  view: AppView;
+  onSetView: (view: AppView) => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick, user, view, onSetView }) => {
+const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, user, view, onSetView }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -22,81 +21,98 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
     onSetView('landing');
   };
 
-  const isNavSolid = isScrolled || view === 'dashboard';
-  const userRole = user?.user_metadata?.role || 'customer';
-  const isEmployee = userRole === 'employer';
+  const isNavSolid = isScrolled || view !== 'landing';
+
+  const navLinks = [
+    { label: 'Home', view: 'landing' as AppView, sectionId: 'home' },
+    { label: 'Products', view: 'landing' as AppView, sectionId: 'products' },
+    { label: 'About Us', view: 'about-page' as AppView },
+    { label: 'Contact Us', view: 'contact-page' as AppView },
+  ];
+
+  const handleLinkClick = (link: { view: AppView, sectionId?: string }) => {
+    onSetView(link.view);
+    setIsOpen(false);
+    
+    if (link.sectionId) {
+      setTimeout(() => {
+        const element = document.getElementById(link.sectionId!);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  };
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-      isNavSolid ? 'bg-slate-950/90 backdrop-blur-xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.5)] py-2 border-b border-white/5' : 'bg-transparent py-5'
+      isNavSolid ? 'bg-red-600 shadow-xl py-3 border-b border-red-700' : 'bg-transparent py-6'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <button onClick={() => onSetView('landing')} className="flex items-center group relative z-10">
-            <Logo 
-              className={`transform transition-all duration-500 origin-left ${isNavSolid ? 'scale-90' : 'scale-100'}`}
-            />
+        <div className="flex justify-between items-center">
+          {/* Branding */}
+          <button 
+            onClick={() => onSetView('landing')} 
+            className="flex flex-col items-start group relative z-10 hover:opacity-90 transition-opacity text-left"
+            aria-label="Aster Money Lenders Home"
+          >
+            <span className="text-xl lg:text-2xl font-medium uppercase tracking-tight text-white leading-tight">
+              Aster Money Lenders
+            </span>
+            <span className="text-[10px] lg:text-[11px] font-normal text-white/80 lowercase tracking-wide -mt-0.5">
+              Helping the nations
+            </span>
           </button>
 
-          <div className="hidden md:flex items-center space-x-6">
-            {view === 'landing' && (
-              <div className="flex items-center">
-                {NAV_LINKS.map((link) => (
-                  <a
+          {/* Desktop Menu */}
+          <div className="hidden md:flex items-center space-x-14">
+            {view !== 'dashboard' && (
+              <div className="flex items-center space-x-12">
+                {navLinks.map((link) => (
+                  <button
                     key={link.label}
-                    href={link.href}
-                    className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 hover:text-amber-500 transition-all"
+                    onClick={() => handleLinkClick(link)}
+                    className={`text-[11px] font-bold uppercase tracking-[0.2em] transition-all text-white hover:text-orange-400 relative py-1 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-[1px] after:bg-orange-400 after:transition-all hover:after:w-full`}
                   >
                     {link.label}
-                  </a>
+                  </button>
                 ))}
               </div>
             )}
             
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center ml-8">
               {user ? (
-                <div className="flex items-center bg-slate-900/50 backdrop-blur-md rounded-2xl p-1 border border-white/10">
+                <div className="flex items-center space-x-4">
                   <button 
                     onClick={() => onSetView(view === 'landing' ? 'dashboard' : 'landing')}
-                    className="flex items-center space-x-3 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all bg-white/10 text-white hover:bg-white/20"
+                    className="px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-white text-white hover:bg-white hover:text-red-600 transition-all"
                   >
-                    {view === 'landing' ? (
-                      <><LayoutDashboard className={`w-4 h-4 ${isEmployee ? 'text-cyan-400' : 'text-amber-400'}`} /><span>Portal</span></>
-                    ) : (
-                      <><Home className="w-4 h-4 text-slate-400" /><span>Home</span></>
-                    )}
+                    {view === 'landing' ? 'Dashboard' : 'Home'}
                   </button>
                   <button 
                     onClick={handleLogout}
-                    className="p-2.5 ml-1 rounded-xl transition-all text-white/40 hover:text-red-500 hover:bg-red-500/10"
+                    className="p-2.5 rounded-xl transition-all text-white hover:bg-white/20"
                     title="Logout"
                   >
                     <LogOut className="w-5 h-5" />
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={onLoginClick}
-                    className="px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all border border-white/20 text-white hover:bg-white/10"
-                  >
-                    Login
-                  </button>
-                  <button 
-                    onClick={onApplyClick} 
-                    className={`px-7 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all shadow-2xl text-white active:scale-95 ${BRAND_COLORS.secondaryBg} ${BRAND_COLORS.secondaryHover}`}
-                  >
-                    Apply Now
-                  </button>
-                </div>
+                <button 
+                  onClick={onLoginClick}
+                  className="px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-white text-white hover:bg-white hover:text-red-600 transition-all shadow-lg shadow-black/10"
+                >
+                  Login
+                </button>
               )}
             </div>
           </div>
 
+          {/* Mobile Menu Button */}
           <div className="md:hidden relative z-10">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="p-3 rounded-2xl text-white bg-white/5 border border-white/10 active:scale-90 transition-transform"
+              className="p-3 rounded-2xl border border-white text-white bg-white/10"
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -104,57 +120,41 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, onApplyClick,
         </div>
       </div>
 
+      {/* Mobile Menu Overlay */}
       <div className={`md:hidden transition-all duration-500 ease-in-out absolute w-full left-0 ${
-        isOpen ? 'top-full opacity-100 bg-slate-950/95 backdrop-blur-2xl border-b border-white/5' : 'top-[-500%] opacity-0 pointer-events-none'
+        isOpen ? 'top-full opacity-100 bg-red-600 border-b border-red-700 shadow-xl' : 'top-[-1000%] opacity-0 pointer-events-none'
       }`}>
         <div className="px-6 pt-4 pb-10 space-y-4">
-          {view === 'landing' && (
-            <div className="grid grid-cols-2 gap-2">
-              {NAV_LINKS.map((link) => (
-                <a
+          {view !== 'dashboard' && (
+            <div className="flex flex-col space-y-2">
+              {navLinks.map((link) => (
+                <button
                   key={link.label}
-                  href={link.href}
-                  onClick={() => setIsOpen(false)}
-                  className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-amber-500 bg-white/5 rounded-2xl border border-white/5"
+                  onClick={() => handleLinkClick(link)}
+                  className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-white/10 rounded-xl transition-all text-left border-b border-white/5"
                 >
                   {link.label}
-                </a>
+                </button>
               ))}
             </div>
           )}
-          <div className="pt-6 space-y-4">
+          <div className="pt-4">
             {user ? (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col space-y-3">
                 <button 
                   onClick={() => { onSetView(view === 'landing' ? 'dashboard' : 'landing'); setIsOpen(false); }}
-                  className="py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white bg-white/10 flex flex-col items-center justify-center space-y-2"
+                  className="w-full py-4 text-[10px] font-bold uppercase tracking-widest border-2 border-white text-white rounded-xl"
                 >
-                  {view === 'landing' ? <LayoutDashboard className={`w-6 h-6 ${isEmployee ? 'text-cyan-400' : 'text-amber-400'}`} /> : <Home className="w-6 h-6 text-slate-400" />}
-                  <span>{view === 'landing' ? 'Portal' : 'Home'}</span>
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-red-500 bg-red-500/10 flex flex-col items-center justify-center space-y-2"
-                >
-                  <LogOut className="w-6 h-6" />
-                  <span>Logout</span>
+                  {view === 'landing' ? 'Dashboard' : 'Return to Home'}
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4">
-                 <button 
-                   onClick={() => { onLoginClick(); setIsOpen(false); }}
-                   className="py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white border border-white/10 bg-white/5"
-                 >
-                   Staff & Client Login
-                 </button>
-                 <button 
-                   onClick={() => { onApplyClick(); setIsOpen(false); }}
-                   className={`py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white shadow-2xl ${BRAND_COLORS.secondaryBg}`}
-                 >
-                   Apply Now
-                 </button>
-              </div>
+              <button 
+                onClick={() => { onLoginClick(); setIsOpen(false); }}
+                className="w-full py-4 text-[10px] font-bold uppercase tracking-widest border-2 border-white text-white rounded-xl bg-white/5"
+              >
+                Login to Portal
+              </button>
             )}
           </div>
         </div>

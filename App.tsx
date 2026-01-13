@@ -3,16 +3,20 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Products from './components/Products';
-import Services from './components/Services';
 import About from './components/About';
 import WhyChooseUs from './components/WhyChooseUs';
 import Investments from './components/Investments';
 import FollowUs from './components/FollowUs';
-import Contact from './components/Contact';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
+import AboutPage from './components/AboutPage';
+import ContactPage from './components/ContactPage';
+import ProductDetailPage from './components/ProductDetailPage';
 import { supabase } from './lib/supabase';
+import { Product } from './types';
+
+export type AppView = 'landing' | 'dashboard' | 'about-page' | 'contact-page' | 'product-detail';
 
 const App: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -29,7 +33,8 @@ const App: React.FC = () => {
   });
   
   const [user, setUser] = useState<any>(null);
-  const [view, setView] = useState<'landing' | 'dashboard'>('landing');
+  const [view, setView] = useState<AppView>('landing');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -37,7 +42,6 @@ const App: React.FC = () => {
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Handle browser back button to close modal
     const handlePopState = () => {
       if (authConfig.isOpen) {
         setAuthConfig(prev => ({ ...prev, isOpen: false }));
@@ -70,26 +74,16 @@ const App: React.FC = () => {
     };
   }, [authConfig.isOpen]);
 
-  useEffect(() => {
-    if (authConfig.isOpen) {
-      document.body.classList.add('no-scroll');
-    } else {
-      document.body.classList.remove('no-scroll');
-    }
-  }, [authConfig.isOpen]);
-
   const openAuth = (
     mode: 'login' | 'signup' | 'reset' = 'login', 
     role: 'customer' | 'employer' = 'customer',
     isRoleLocked: boolean = false
   ) => {
-    // Push state so back button works
     window.history.pushState({ modal: true }, '');
     setAuthConfig({ isOpen: true, mode, role, isRoleLocked });
   };
 
   const closeAuth = () => {
-    // If we're closing via UI, we might want to go back in history if we pushed state
     if (window.history.state?.modal) {
       window.history.back();
     } else {
@@ -97,38 +91,50 @@ const App: React.FC = () => {
     }
   };
 
+  const handleNavigate = (targetView: AppView) => {
+    setView(targetView);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleViewProduct = (product: Product) => {
+    setSelectedProduct(product);
+    handleNavigate('product-detail');
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <Navbar 
         isScrolled={isScrolled} 
-        onLoginClick={() => openAuth('login', 'customer', false)} // Login allows role choice
-        onApplyClick={() => openAuth('login', 'customer', true)}  // Apply forces Customer role
+        onLoginClick={() => openAuth('login', 'customer', false)}
         user={user}
         view={view}
-        onSetView={setView}
+        onSetView={handleNavigate}
       />
       
       <main className="transition-all duration-500">
         {view === 'dashboard' && user ? (
           <Dashboard user={user} />
+        ) : view === 'about-page' ? (
+          <AboutPage />
+        ) : view === 'contact-page' ? (
+          <ContactPage />
+        ) : view === 'product-detail' && selectedProduct ? (
+          <ProductDetailPage 
+            product={selectedProduct} 
+            onBack={() => handleNavigate('landing')} 
+          />
         ) : (
           <div className={authConfig.isOpen ? 'hidden' : 'block'}>
             <Hero 
               onApplyClick={() => openAuth('login', 'customer', true)} 
               onInvestClick={() => openAuth('login', 'customer', true)}
             />
-            <Products />
-            <Services />
+            <Products onProductSelect={handleViewProduct} />
             <About />
             <WhyChooseUs />
-            <Investments onInvestClick={() => openAuth('login', 'customer', true)} />
+            <Investments />
             <FollowUs />
-            <Contact />
-            <Footer 
-              onLoginClick={() => openAuth('login', 'customer', false)} 
-              onApplyClick={() => openAuth('login', 'customer', true)}
-              user={user} 
-            />
+            <Footer onSetView={handleNavigate} onProductSelect={handleViewProduct} />
           </div>
         )}
       </main>

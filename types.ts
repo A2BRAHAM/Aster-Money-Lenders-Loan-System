@@ -5,14 +5,19 @@ export interface Product {
   id: string;
   title: string;
   description: string;
-  // Fix: Added React import to satisfy the React namespace requirement
   icon: React.ReactNode;
+  eligibility?: string[];
+  requirements?: string[];
+  additionalInfo?: {
+    duration: string;
+    repayment: string;
+    notes: string;
+  };
 }
 
 export interface Service {
   id: string;
   title: string;
-  // Fix: Added React import to satisfy the React namespace requirement
   icon: React.ReactNode;
 }
 
@@ -20,6 +25,5 @@ export interface TrustPoint {
   id: string;
   title: string;
   description: string;
-  // Fix: Added React import to satisfy the React namespace requirement
   icon: React.ReactNode;
 }
