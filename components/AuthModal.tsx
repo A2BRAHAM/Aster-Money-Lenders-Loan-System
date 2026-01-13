@@ -8,7 +8,6 @@ import { supabase } from '../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
-  // Fix: changed onClose type from void to () => void as it is used as a function
   onClose: () => void;
   initialMode?: 'login' | 'signup' | 'reset';
   targetRole?: 'customer' | 'employer';
@@ -32,44 +31,113 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
+  // Sync mode and role with props when modal opens or props change
   useEffect(() => {
-    setMode(initialMode);
-    setRole(defaultTargetRole);
+    if (isOpen) {
+      setMode(initialMode);
+      setRole(defaultTargetRole);
+    }
+  }, [initialMode, isOpen, defaultTargetRole]);
+
+  // STRICT REQUIREMENT: Ensure all fields are cleared when switching modes or opening/closing
+  useEffect(() => {
     setError(null);
     setSuccess(null);
     setConfirmPassword('');
-  }, [initialMode, isOpen, defaultTargetRole]);
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setRegistrationComplete(false);
+  }, [mode, isOpen]);
 
   if (!isOpen) return null;
+
+  const validatePassword = (pass: string) => {
+    const hasUpper = /[A-Z]/.test(pass);
+    const hasLower = /[a-z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
+    return hasUpper && hasLower && hasNumber && hasSymbol;
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (mode === 'signup' && password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
+    setError(null);
+    setSuccess(null);
+
+    // Capture current form values before potential clearing
+    const formEmail = email;
+    const formPassword = password;
+    const formFullName = fullName;
+    const formConfirmPassword = confirmPassword;
+    const formRole = role;
+
+    if (mode === 'signup') {
+      // STRICT REQUIREMENT: ALWAYS clear all input fields on click
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      setFullName('');
+
+      if (!validatePassword(formPassword)) {
+        setError("Password must contain at least one uppercase letter, one lowercase letter, one number, and one symbol.");
+        return;
+      }
+      if (formPassword !== formConfirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
     }
 
     setLoading(true);
-    setError(null);
-    setSuccess(null);
 
     try {
       if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: fullName, role: role } }
+          email: formEmail,
+          password: formPassword,
+          options: { data: { full_name: formFullName, role: formRole } }
         });
-        if (signUpError) throw signUpError;
-        setSuccess(`Verification link sent to your email.`);
+        
+        if (signUpError) {
+          if (signUpError.message.toLowerCase().includes('already registered')) {
+            // Requirement met: Fields were cleared above, now show specific error
+            throw new Error("Email is already registered.");
+          }
+          throw signUpError;
+        }
+
+        // Success flow
+        setRegistrationComplete(true);
+        setSuccess("Congratulation, your submission is successful. \nTo complete your registration, please verify your email address. \nA verification link has been sent to your email. \nCheck your inbox (or spam folder) and click the link to activate your account.");
       } else if (mode === 'login') {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({ 
+          email: formEmail, 
+          password: formPassword 
+        });
+        
         if (signInError) throw signInError;
+
+        // ROLE-BASED EMAIL SEPARATION: Prevent login if role mismatch occurs
+        if (data.user) {
+          const actualRole = data.user.user_metadata?.role;
+          if (actualRole && actualRole !== formRole) {
+            // Sign out to invalidate the session that was just created
+            await supabase.auth.signOut();
+            if (actualRole === 'customer') {
+              throw new Error("This email is registered as a customer.");
+            } else {
+              throw new Error("This email is registered as an employee.");
+            }
+          }
+        }
+        
         onClose();
       } else if (mode === 'reset') {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(formEmail);
         if (resetError) throw resetError;
         setSuccess('Recovery link sent.');
       }
@@ -90,6 +158,13 @@ const AuthModal: React.FC<AuthModalProps> = ({
     </button>
   );
 
+  const resetToLogin = () => {
+    setMode('login');
+    setRegistrationComplete(false);
+    setSuccess(null);
+    setError(null);
+  };
+
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div className="absolute inset-0" onClick={onClose}></div>
@@ -101,7 +176,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
             {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Sign up' : 'Account recovery'}
           </h2>
 
-          {!isRoleLocked && mode !== 'reset' && (
+          {!isRoleLocked && mode !== 'reset' && !registrationComplete && (
             <div className="flex p-1 bg-white border border-black rounded-xl">
               <button 
                 type="button"
@@ -124,126 +199,149 @@ const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {error && <div className="mb-4 p-2 bg-white border border-red-600 text-red-600 rounded-lg text-[10px] font-bold text-center">{error}</div>}
-        {success && <div className="mb-4 p-2 bg-white border border-red-600 text-red-600 rounded-lg text-[10px] font-bold text-center">{success}</div>}
+        {success && (
+          <div className={`mb-4 p-2 bg-white border ${registrationComplete ? 'border-green-600 text-green-600' : 'border-red-600 text-red-600'} rounded-lg text-[10px] font-bold text-center whitespace-pre-line`}>
+            {success}
+          </div>
+        )}
 
-        <form onSubmit={handleAuth} className="space-y-2">
-          {mode === 'signup' && (
-            <input
-              type="text" required value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
-              placeholder="Full name"
-            />
-          )}
-
-          <input
-            type="email" required value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
-            placeholder="Email address"
-          />
-
-          {mode !== 'reset' && (
-            <div className="relative group">
-              <input
-                type={showPassword ? 'text' : 'password'} required value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
-                placeholder="Password"
-              />
-              <button 
-                type="button" onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-red-600"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          )}
-
-          {mode === 'signup' && (
-            <div className="relative group">
-              <input
-                type={showPassword ? 'text' : 'password'} required value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
-                placeholder="Repeat password"
-              />
-            </div>
-          )}
-
-          {mode === 'login' && (
-            <button 
-              type="button"
-              onClick={() => setMode('reset')}
-              className="block w-full text-right pr-2 text-[10px] text-red-600 hover:underline"
-            >
-              Reset password
-            </button>
-          )}
-
-          <div className="pt-2 space-y-2">
+        {registrationComplete ? (
+          <div className="space-y-4 text-center animate-fade-in-up">
             <button
-              type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-red-600 bg-red-600 text-white hover:bg-black hover:border-black active:scale-95 disabled:opacity-50"
+              onClick={resetToLogin}
+              className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-red-600 bg-white text-red-600 hover:bg-red-600 hover:text-white active:scale-95"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-white" /> : (
-                mode === 'login' ? 'Proceed to account' : mode === 'signup' ? 'Create account' : 'Request link'
-              )}
+              Login
             </button>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-black bg-white text-black hover:bg-black hover:text-white active:scale-95"
+            >
+              Return home
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleAuth} className="space-y-2">
+            {mode === 'signup' && (
+              <input
+                type="text" required value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+                placeholder="Full name"
+              />
+            )}
+
+            <input
+              type="email" required value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+              placeholder="Email address"
+            />
+
+            {mode !== 'reset' && (
+              <div className="relative group">
+                <input
+                  type={showPassword ? 'text' : 'password'} required value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+                  placeholder="Password"
+                />
+                <button 
+                  type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-red-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
+
+            {mode === 'signup' && (
+              <div className="relative group">
+                <input
+                  type={showPassword ? 'text' : 'password'} required value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-white border border-red-600 px-4 py-2.5 rounded-xl text-black outline-none focus:ring-1 focus:ring-red-600 transition-all text-xs font-medium"
+                  placeholder="Repeat password"
+                />
+              </div>
+            )}
 
             {mode === 'login' && (
-              <button
+              <button 
                 type="button"
-                className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-black bg-white text-black hover:bg-black hover:text-white flex items-center justify-center space-x-2"
+                onClick={() => setMode('reset')}
+                className="block w-full text-right pr-2 text-[10px] text-red-600 hover:underline"
               >
-                <div className="w-4 h-4 flex items-center justify-center font-black border border-current rounded-sm text-[8px]">G</div>
-                <span>Continue with google</span>
+                Reset password
               </button>
             )}
-          </div>
-        </form>
 
-        <div className="mt-6 pt-4 border-t border-red-600 text-center">
-          <div className="text-[10px] text-black font-bold">
-            {mode === 'login' ? (
-              <>
-                Don’t have an account?{' '}
+            <div className="pt-2 space-y-2">
+              <button
+                type="submit" disabled={loading}
+                className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-red-600 bg-red-600 text-white hover:bg-black hover:border-black active:scale-95 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-white" /> : (
+                  mode === 'login' ? 'Proceed to account' : mode === 'signup' ? 'Create account' : 'Request link'
+                )}
+              </button>
+
+              {mode === 'login' && (
                 <button
                   type="button"
-                  onClick={() => setMode('signup')}
-                  className="text-red-600 hover:underline transition-all"
+                  className="w-full py-3 rounded-xl font-bold text-[10px] tracking-widest transition-all duration-300 border border-black bg-white text-black hover:bg-black hover:text-white flex items-center justify-center space-x-2"
                 >
-                  Sign up here.
+                  <div className="w-4 h-4 flex items-center justify-center font-black border border-current rounded-sm text-[8px]">G</div>
+                  <span>Continue with google</span>
                 </button>
-              </>
-            ) : (
-              <>
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className="text-red-600 hover:underline transition-all"
-                >
-                  Login
-                </button>
-              </>
-            )}
-          </div>
-          
-          <div className="mt-4 flex items-center justify-center gap-3">
-             <SocialIcon icon={Facebook} label="Facebook" />
-             <SocialIcon icon={Linkedin} label="LinkedIn" />
-             <SocialIcon icon={Instagram} label="Instagram" />
-          </div>
+              )}
+            </div>
+          </form>
+        )}
 
-          <button 
-            onClick={onClose}
-            className="mt-6 inline-flex items-center space-x-1 text-[10px] font-bold text-red-600 hover:opacity-80 transition-opacity"
-          >
-            <ArrowLeft className="w-3 h-3" />
-            <span>Return home</span>
-          </button>
-        </div>
+        {!registrationComplete && (
+          <div className="mt-6 pt-4 border-t border-red-600 text-center">
+            <div className="text-[10px] text-black font-bold">
+              {mode === 'login' ? (
+                <>
+                  Don’t have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setMode('signup')}
+                    className="text-red-600 hover:underline transition-all"
+                  >
+                    Sign up here.
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-red-600 hover:underline transition-all"
+                  >
+                    Login
+                  </button>
+                </>
+              )}
+            </div>
+            
+            <div className="mt-4 flex items-center justify-center gap-3">
+               <SocialIcon icon={Facebook} label="Facebook" />
+               <SocialIcon icon={Linkedin} label="LinkedIn" />
+               <SocialIcon icon={Instagram} label="Instagram" />
+            </div>
+
+            <button 
+              onClick={onClose}
+              className="mt-6 inline-flex items-center space-x-1 text-[10px] font-bold text-red-600 hover:opacity-80 transition-opacity"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              <span>Return home</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
