@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Trash2, Edit3, TrendingUp, Clock, CheckCircle, Loader2,
@@ -8,10 +7,14 @@ import {
   Calculator, HardDrive, Receipt, UserCheck, MapPin, Info,
   Upload, FileText, Smartphone, Mail, Map,
   Building, UserSquare2, Fingerprint, CreditCard, HeartHandshake,
-  AlertCircle, Shield, ArrowLeft
+  AlertCircle, Shield, ArrowLeft, Settings, ShieldAlert, ToggleLeft, ToggleRight,
+  Package, Search, Filter, MoreHorizontal, History,
+  UserCircle, Eye, Download, Activity, PanelLeftClose, PanelLeftOpen, HelpCircle,
+  Zap, Headset, ShoppingCart, Box, Printer, FileSpreadsheet, ArrowDown, Bell,
+  FileDown, RefreshCw, Layers, ShieldCheck as ShieldCheckIcon, AlertTriangle,
+  RotateCcw, Landmark, List, ClipboardCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BRAND_COLORS } from '../constants';
 
 interface DashboardProps {
   user: any;
@@ -26,267 +29,426 @@ interface Application {
   status: string;
   created_at: string;
   user_email?: string;
+  balance?: number;
+  due_date?: string;
+  customer_name?: string;
+}
+
+interface Borrower {
+  id: string;
+  customerNumber: string;
+  fullName: string;
+  gender: string;
+  dob: string;
+  nrc: string;
+  phone: string;
+  email: string;
+  address: string;
+  employmentType: 'Employed' | 'Self-employed';
+  status: 'Current' | 'In arrears' | 'Closed';
+  branch: string;
 }
 
 interface MenuItem {
   id: string;
   label: string;
   icon: React.ReactNode;
-  subItems?: string[];
+  subItems?: { id: string; label: string }[];
   isSingle?: boolean;
 }
+
+const SYSTEM_ADMIN_EMAIL = "abrahamgmutwale@gmail.com";
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState('overview');
+  const [selectedBorrower, setSelectedBorrower] = useState<Borrower | null>(null);
+  const [showPaymentWidget, setShowPaymentWidget] = useState(false);
   
-  const userRole = user.user_metadata?.role || 'customer';
-  const isEmployer = userRole === 'employer';
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [globalSearchActive, setGlobalSearchActive] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [helpPanelOpen, setHelpPanelOpen] = useState(false);
+  
+  const isSystemAdmin = user.email === SYSTEM_ADMIN_EMAIL;
+  const userRole = isSystemAdmin ? 'Admin' : (user.user_metadata?.role || 'customer');
+  const isEmployer = userRole !== 'customer' && userRole !== 'borrower';
 
   const toggleMenu = (id: string) => {
     setExpandedMenus(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSubItemClick = (subItem: string) => {
-    setCurrentView(subItem);
+  const handleSubItemClick = (viewId: string) => {
+    setCurrentView(viewId);
+  };
+
+  const sidebarToggle = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
   const fetchApplications = async () => {
     setLoading(true);
     let query = supabase.from('loan_applications').select('*');
-    if (!isEmployer) {
+    if (userRole === 'customer') {
       query = query.eq('user_id', user.id);
     }
     const { data, error } = await query.order('created_at', { ascending: false });
-    if (!error && data) setApplications(data);
+    
+    if (!error && data) {
+      const supplemented = data.map(app => ({
+        ...app,
+        balance: app.status === 'Approved' ? app.amount * 0.8 : 0,
+        due_date: new Date(Date.now() + 86400000 * 15).toISOString(),
+        customer_name: app.user_email?.split('@')[0] || 'Unknown Customer'
+      }));
+      setApplications(supplemented);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchApplications();
-  }, [isEmployer]);
+  }, [userRole]);
 
   const updateStatus = async (id: string, newStatus: string) => {
-    if (!isEmployer) return;
-    const { error } = await supabase.from('loan_applications').update({ status: newStatus, updated_at: new Date() }).eq(id, id);
+    if (userRole === 'customer') return;
+    const { error } = await supabase.from('loan_applications').update({ status: newStatus, updated_at: new Date() }).eq('id', id);
     if (!error) fetchApplications();
   };
 
   const menuItems: MenuItem[] = [
-    { id: 'branch', label: 'Home branch', icon: <Home className="w-4 h-4" />, isSingle: true },
+    { id: 'branch', label: 'Home Branch', icon: <Home className="w-4 h-4" />, isSingle: true },
     { id: 'borrowers', label: 'Borrowers', icon: <Users className="w-4 h-4" />, subItems: [
-      'View borrowers', 'Add borrower', 'View borrower groups', 'Add borrowers group', 
-      'Send SMS to all', 'Send email to all', 'Invite borrowers'
+      { id: 'ViewBorrowers', label: 'View Borrowers' },
+      { id: 'AddBorrower', label: 'Add Borrower' },
+      { id: 'ViewBorrowerGroups', label: 'View Borrower Groups' },
+      { id: 'InviteBorrowers', label: 'Invite Borrowers' }
     ]},
     { id: 'loans', label: 'Loans', icon: <BarChart3 className="w-4 h-4" />, subItems: [
-      'View all loans', 'Add loan', 'Due loans', 'Missed repayments', 'Loans in arrears',
-      'No repayments', 'Past maturity date', 'Principal outstanding', '1 month late',
-      '3 months late', 'Loan calculator', 'Guarantors', 'Loan comments', 'Approve loans'
+      { id: 'ViewAllLoans', label: 'View All Loans' },
+      { id: 'AddLoan', label: 'Add Loan' },
+      { id: 'DueLoans', label: 'Due Loans' },
+      { id: 'LoanCalculator', label: 'Loan Calculator' },
+      { id: 'ApproveLoans', label: 'Approve Loans' }
     ]},
     { id: 'repayments', label: 'Repayments', icon: <DollarSign className="w-4 h-4" />, subItems: [
-      'View repayments', 'Add bulk repayments', 'Add repayments (CSV)', 'Repayments charts', 'Approve repayments'
-    ]},
-    { id: 'collateral', label: 'Collateral register', icon: <ShieldCheck className="w-4 h-4" />, isSingle: true },
-    { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4" />, isSingle: true },
-    { id: 'collection', label: 'Collection sheets', icon: <ClipboardList className="w-4 h-4" />, subItems: [
-      'Daily collection sheet', 'Missed repayment sheet', 'Past maturity date', 'Send SMS', 'Send email'
-    ]},
-    { id: 'savings', label: 'Savings', icon: <Wallet className="w-4 h-4" />, subItems: [
-      'View savings accounts', 'Add savings account', 'Savings charts', 'Savings report',
-      'Savings products report', 'Savings fee report', 'Cash safe management'
-    ]},
-    { id: 'savings_trans', label: 'Savings transactions', icon: <ArrowRightLeft className="w-4 h-4" />, subItems: [
-      'View transactions', 'Add bulk transactions', 'Upload (CSV)', 'Staff report', 'Approve transactions'
-    ]},
-    { id: 'investors', label: 'Investors', icon: <UserPlus className="w-4 h-4" />, subItems: [
-      'View investors', 'Add investor', 'Send SMS', 'Send email', 'Invite investors'
-    ]},
-    { id: 'investor_acc', label: 'Investor accounts', icon: <Briefcase className="w-4 h-4" />, subItems: [
-      'View all accounts', 'Add investor account', 'View all investments', 'View investor transactions', 'Approve loan investments'
-    ]},
-    { id: 'signatures', label: 'E-signatures', icon: <PenTool className="w-4 h-4" />, isSingle: true },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-4 h-4" />, subItems: [
-      'Borrowers report', 'Loan report', 'Loan arrears aging report', 'Collections report',
-      'Collector report (staff)', 'Deferred income', 'Deferred income monthly', 'Pro-rata collections monthly',
-      'Disbursement report', 'Fees report', 'Loan officer report', 'Loan products report',
-      'MFRS ratios', 'Daily report', 'Monthly report', 'Outstanding report',
-      'Portfolio at risk (PAR)', 'At a glance report'
+      { id: 'ViewRepayments', label: 'View Repayments' },
+      { id: 'AddBulkRepayments', label: 'Add Bulk Repayments' },
+      { id: 'ApproveRepayments', label: 'Approve Repayments' }
     ]},
     { id: 'accounting', label: 'Accounting', icon: <Calculator className="w-4 h-4" />, subItems: [
-      'Cash flow accumulated', 'Cash flow monthly', 'Profit / loss', 'Balance sheet',
-      'Trial balance', 'General ledger summary', 'Branch equity', 'Inter-bank transfers',
-      'Reconcile entries', 'Chart of accounts', 'Manual journal'
+      { id: 'BalanceSheet', label: 'Balance Sheet' },
+      { id: 'TrialBalance', label: 'Trial Balance' },
+      { id: 'ChartOfAccounts', label: 'Chart of Accounts' },
+      { id: 'ManualJournal', label: 'Manual Journal' }
     ]},
-    { id: 'assets', label: 'Asset management', icon: <HardDrive className="w-4 h-4" />, subItems: [
-      'View asset management', 'Add asset management'
-    ]},
-    { id: 'income', label: 'Other income', icon: <TrendingUp className="w-4 h-4" />, subItems: [
-      'View other income', 'Add other income', 'Upload other income (CSV file)'
-    ]},
-    { id: 'expenses', label: 'Expenses', icon: <Receipt className="w-4 h-4" />, subItems: [
-      'View expenses', 'Add expense', 'Upload expenses (CSV file)'
-    ]},
-    { id: 'payroll', label: 'Payroll', icon: <UserCheck className="w-4 h-4" />, subItems: [
-      'View payroll', 'Add payroll', 'Payroll report'
+    { id: 'reports', label: 'Reports', icon: <FileText className="w-4 h-4" />, subItems: [
+      { id: 'LoanReport', label: 'Loan Report' },
+      { id: 'BorrowersReport', label: 'Borrowers Report' },
+      { id: 'CollectionsReport', label: 'Collections Report' }
     ]}
   ];
 
-  if (!isEmployer) {
-    return (
-      <div className="pt-24 pb-12 bg-red-50/10 min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-12">
+  const handleAction = (action: string) => {
+    if (action === 'ReceivePayment') setShowPaymentWidget(true);
+    else if (action === 'AddLoan' || action === 'CreateLoan') setCurrentView('AddBorrower');
+    else if (action === 'ReviewLoanRequest' || action === 'ApproveLoan') setCurrentView('ViewAllLoans');
+    else if (action === 'ViewCustomersList') setCurrentView('ViewBorrowers');
+    else if (action === 'RegisterCustomer') setCurrentView('AddBorrower');
+    else if (action === 'Calendar') setCurrentView('calendar_view');
+  };
+
+  const handleViewBorrower = (borrower: Borrower) => {
+    setSelectedBorrower(borrower);
+    setCurrentView('borrower-profile');
+  };
+
+  const renderContent = () => {
+    if (currentView === 'AddBorrower') return <AddBorrowerPage user={user} onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'ViewBorrowers') return <BorrowerListPage onViewBorrower={handleViewBorrower} onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'borrower-profile' && selectedBorrower) return <BorrowerProfilePage borrower={selectedBorrower} user={user} onBack={() => setCurrentView('ViewBorrowers')} />;
+    
+    if (currentView === 'overview') {
+      return (
+        <div className="animate-fade-in space-y-8">
+          {/* Dashboard Summary Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-serif font-bold text-red-950">Your Portfolio</h1>
-              <p className="text-red-400 text-xs font-bold uppercase tracking-widest mt-1">
-                Account: <span className="text-red-600">{user.email}</span>
-              </p>
+              <h1 className="text-2xl font-serif font-bold text-slate-900">Admin Dashboard</h1>
+              <p className="text-[11px] font-medium text-slate-500 uppercase mt-1">Aster Money Lenders • Primary Branch</p>
+            </div>
+            <div className="flex items-center gap-2">
+               <button onClick={fetchApplications} className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-slate-100 shadow-sm transition-all"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+               <button className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-[10px] font-bold uppercase tracking-normal shadow-sm hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-3.5 h-3.5" /> Export Data</button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            <StatsCard icon={<Wallet className="w-8 h-8"/>} title="Portfolio Value" value={`K ${(applications.reduce((acc, c) => acc + (c.status === 'Approved' ? c.amount : 0), 0) * 1.1).toLocaleString()}`} />
-            <StatsCard icon={<Clock className="w-8 h-8"/>} title="Active Requests" value={applications.filter(a => a.status === 'Pending').length.toString()} color="orange" />
-            <StatsCard icon={<CheckCircle className="w-8 h-8"/>} title="Approved Credit" value={`K ${applications.filter(a => a.status === 'Approved').reduce((acc, c) => acc + c.amount, 0).toLocaleString()}`} color="red-filled" />
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <KPICard title="Total Customers" value="1,422" icon={<Users />} color="blue" />
+            <KPICard title="Active Loans" value="894" icon={<Briefcase />} color="green" />
+            <KPICard title="Total Portfolio" value="K 4.2M" icon={<Wallet />} color="green" />
+            <KPICard title="Total Collected" value="K 1.8M" icon={<CheckCircle />} color="green" />
+            <KPICard title="Outstanding Balance" value="K 2.4M" icon={<BarChart3 />} color="yellow" />
+            <KPICard title="Loans In Arrears" value="K 425K" icon={<AlertTriangle />} color="red" />
           </div>
 
-          <div className="bg-white rounded-[2.5rem] border border-red-50 shadow-xl overflow-hidden">
-            <div className="p-8 border-b border-red-50 flex justify-between items-center bg-red-50/10">
-               <h2 className="text-lg font-bold text-red-950 uppercase tracking-widest">Transaction Queue</h2>
-               <button onClick={fetchApplications} className="text-red-400 hover:text-red-600 text-xs font-black uppercase tracking-widest">Refresh</button>
+          {/* Quick Actions Panel */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-4">
+                <h3 className="text-[11px] font-bold uppercase text-slate-400">Quick Actions</h3>
+                <div className="h-px bg-slate-100 flex-1"></div>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Loans & Payments Group */}
+                <div className="bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-2">
+                   <p className="text-[13px] font-bold text-white bg-red-600 uppercase mb-3 px-3 py-1.5 rounded-lg">Loans & Payments</p>
+                   <ActionButton icon={<Plus />} label="Create Loan" onClick={() => handleAction('CreateLoan')} />
+                   <ActionButton icon={<ClipboardCheck />} label="Review Loan Request" onClick={() => handleAction('Review Loan Request')} />
+                   <ActionButton icon={<CheckCircle />} label="Approve Loan" onClick={() => handleAction('Approve Loan')} />
+                   <ActionButton icon={<DollarSign />} label="Receive Payment" onClick={() => handleAction('Receive Payment')} />
+                   <ActionButton icon={<RotateCcw />} label="Create Refund" onClick={() => handleAction('Create Refund')} />
+                </div>
+
+                {/* Customers & Accounts Group */}
+                <div className="bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-2">
+                   <p className="text-[13px] font-bold text-white bg-red-600 uppercase mb-3 px-3 py-1.5 rounded-lg">Customers & Accounts</p>
+                   <ActionButton icon={<List />} label="View Customers List" onClick={() => handleAction('ViewCustomersList')} />
+                   <ActionButton icon={<Download />} label="Deposit Money" onClick={() => handleAction('DepositMoney')} />
+                   <ActionButton icon={<ArrowRightLeft />} label="Transfer Fund" onClick={() => handleAction('TransferFund')} />
+                   <ActionButton icon={<UserPlus />} label="Register Customer" onClick={() => handleAction('Register Customer')} />
+                </div>
+
+                {/* Finance & Expenses Group */}
+                <div className="bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-2">
+                   <p className="text-[13px] font-bold text-white bg-red-600 uppercase mb-3 px-3 py-1.5 rounded-lg">Finance & Expenses</p>
+                   <ActionButton icon={<Receipt />} label="Enter Expense" onClick={() => handleAction('EnterExpense')} />
+                   <ActionButton icon={<Calendar />} label="Calendar" onClick={() => handleAction('Calendar')} />
+                   <ActionButton icon={<History />} label="Audit Log" onClick={() => handleAction('AuditLog')} />
+                </div>
+
+                {/* Employees & HR Group */}
+                <div className="bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-2">
+                   <p className="text-[13px] font-bold text-white bg-red-600 uppercase mb-3 px-3 py-1.5 rounded-lg">Employees & HR</p>
+                   <ActionButton icon={<Clock />} label="Employee Clocking" onClick={() => handleAction('EmployeeClocking')} />
+                   <ActionButton icon={<CreditCard />} label="Pay Employee" onClick={() => handleAction('Pay Employee')} />
+                   <ActionButton icon={<ClipboardList />} label="Assign Task" onClick={() => handleAction('Assign Task')} />
+                   <ActionButton icon={<HeartHandshake />} label="HR Management" onClick={() => handleAction('HR Management')} />
+                </div>
+             </div>
+          </div>
+
+          {/* Charts & Table Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-8 space-y-8">
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400">Loan Disbursement Trend</h3>
+                    <div className="flex bg-slate-50 p-1 rounded-lg">
+                      <button className="px-3 py-1 text-[9px] font-bold uppercase rounded bg-white shadow-sm">Monthly</button>
+                      <button className="px-3 py-1 text-[9px] font-bold uppercase text-slate-400">Weekly</button>
+                    </div>
+                  </div>
+                  <div className="h-48 flex items-end justify-between gap-3 pt-4">
+                    {[40, 65, 30, 85, 45, 95, 60, 50, 70, 40, 80, 55].map((h, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                        <div className="w-full bg-red-50 rounded-t-lg transition-all duration-300 hover:bg-red-600 relative" style={{ height: `${h}%` }}>
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">K{h*10}K</div>
+                        </div>
+                        <span className="text-[8px] font-medium text-slate-400 uppercase">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400">Active Loans Table</h3>
+                    <div className="relative">
+                      <input type="text" placeholder="Search Loan ID..." className="pl-8 pr-4 py-1.5 rounded-full bg-slate-50 border border-slate-100 text-[10px] outline-none focus:ring-1 focus:ring-red-600 w-48" />
+                      <Search className="w-3.5 h-3.5 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+                  <ActiveLoansTable applications={applications} onAction={handleAction} />
+               </div>
             </div>
-            <ApplicationTable loading={loading} applications={applications} isEmployer={false} updateStatus={updateStatus} />
+
+            <div className="lg:col-span-4 space-y-8">
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <h3 className="text-[11px] font-bold uppercase text-slate-400 mb-6">Risk & Arrears Management</h3>
+                  <div className="space-y-4">
+                    <OverdueRow name="Moses Mulenga" days={14} balance="K 8,420" risk="High" />
+                    <OverdueRow name="Agness Chama" days={5} balance="K 12,500" risk="Medium" />
+                    <OverdueRow name="John Phiri" days={2} balance="K 3,200" risk="Low" />
+                  </div>
+                  <button className="w-full mt-6 py-3.5 text-[9px] font-bold uppercase text-red-600 border border-dashed border-red-200 rounded-xl hover:bg-slate-100 transition-all">View All Defaulters</button>
+               </div>
+
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400">Notifications & Alerts</h3>
+                    <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
+                  </div>
+                  <div className="space-y-4">
+                    <NotificationItem type="Payment" text="K 2,500 received from AM-9982" time="2m ago" />
+                    <NotificationItem type="KYC" text="New submission from Sarah Soko" time="15m ago" />
+                    <NotificationItem type="Alert" text="Loan LN-4042 is now 14 days overdue" time="1h ago" />
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
+    return <div className="p-10 text-center text-slate-400 font-bold uppercase">Module In Progress</div>;
+  };
+
+  const sidebarWidth = isSidebarCollapsed ? 'w-20' : 'w-64';
+  const mainMargin = isSidebarCollapsed ? 'ml-20' : 'ml-64';
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 fixed h-screen overflow-y-auto z-40 border-r border-slate-800 pt-20 custom-scrollbar">
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">
+    <div className="flex min-h-screen bg-slate-50 relative overflow-x-hidden">
+      <aside className={`${sidebarWidth} bg-slate-900 text-slate-300 flex-shrink-0 fixed h-screen overflow-y-auto z-40 border-r border-slate-800 pt-20 custom-scrollbar transition-all duration-300`}>
+        <div className="px-4 py-2 border-b border-slate-800 flex justify-end">
+          <button onClick={sidebarToggle} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
+            {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
+        </div>
+        <div className={`p-6 border-b border-slate-800 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} mb-4`}>
+            <div className="w-10 h-10 rounded-full bg-red-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-900/20">
               {user.email?.[0].toUpperCase()}
             </div>
-            <div>
-              <p className="text-sm font-bold text-white truncate w-32">{user.email?.split('@')[0]}</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Administrator</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter">
-              <span className="text-slate-500">Active Branch</span>
-              <span className="bg-red-600/20 text-red-500 px-2 py-0.5 rounded">Branch #1</span>
-            </div>
-            <button className="text-[10px] font-bold text-blue-400 hover:text-blue-300 underline underline-offset-2">
-              View another branch
-            </button>
+            {!isSidebarCollapsed && (
+              <div className="truncate">
+                <p className="text-sm font-bold text-white truncate w-32">{user.email?.split('@')[0]}</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">{userRole}</p>
+              </div>
+            )}
           </div>
         </div>
-
         <nav className="p-4 space-y-1">
-          {menuItems.map((item) => (
+          <button 
+            onClick={() => setCurrentView('overview')}
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'space-x-3 px-3'} py-2.5 rounded-lg text-sm font-normal transition-all ${
+              currentView === 'overview' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Home className="w-4 h-4 flex-shrink-0" />
+            {!isSidebarCollapsed && <span>Dashboard</span>}
+          </button>
+          <div className="h-px bg-slate-800 my-4"></div>
+          {menuItems.slice(1).map((item) => (
             <div key={item.id} className="space-y-1">
-              {item.isSingle ? (
-                <button 
-                  onClick={() => setCurrentView('overview')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    currentView === 'overview' && item.id === 'branch' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <span className="text-slate-500 group-hover:text-red-600">{item.icon}</span>
-                  <span>{item.label}</span>
-                </button>
-              ) : (
-                <>
-                  <button 
-                    onClick={() => toggleMenu(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      expandedMenus[item.id] ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className={`${expandedMenus[item.id] ? 'text-red-500' : 'text-slate-500'}`}>{item.icon}</span>
-                      <span>{item.label}</span>
-                    </div>
-                    {expandedMenus[item.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  </button>
-                  
-                  {expandedMenus[item.id] && (
-                    <div className="ml-9 space-y-1 py-1 animate-fade-in">
-                      {item.subItems?.map((sub, idx) => (
-                        <button 
-                          key={idx} 
-                          onClick={() => handleSubItemClick(sub)}
-                          className={`w-full text-left px-3 py-1.5 text-[11px] font-medium transition-all border-l border-slate-700 ${
-                            currentView === sub ? 'text-red-500 pl-4 border-red-500' : 'text-slate-400 hover:text-red-500 hover:pl-4'
-                          }`}
-                        >
-                          {sub}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+              <button 
+                onClick={() => !isSidebarCollapsed && toggleMenu(item.id)}
+                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-3'} py-2.5 rounded-lg text-sm font-normal transition-all ${
+                  expandedMenus[item.id] && !isSidebarCollapsed ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
+                  <span className={`${expandedMenus[item.id] && !isSidebarCollapsed ? 'text-red-500' : 'text-slate-500'} flex-shrink-0`}>{item.icon}</span>
+                  {!isSidebarCollapsed && <span>{item.label}</span>}
+                </div>
+                {!isSidebarCollapsed && (expandedMenus[item.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
+              </button>
+              {expandedMenus[item.id] && !isSidebarCollapsed && (
+                <div className="ml-9 space-y-1 py-1 animate-fade-in">
+                  {item.subItems?.map((sub, idx) => (
+                    <button 
+                      key={idx} 
+                      onClick={() => handleSubItemClick(sub.id)}
+                      className={`w-full text-left px-3 py-1.5 text-[11px] font-normal transition-all border-l border-slate-700 ${
+                        currentView === sub.id ? 'text-red-500 pl-4 border-red-500' : 'text-slate-400 hover:text-red-500 hover:pl-4'
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           ))}
         </nav>
       </aside>
 
-      <main className="flex-1 ml-64 pt-24 pb-12 px-8">
+      {/* Header */}
+      <header className={`fixed top-0 right-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-8 transition-all duration-300 h-16 pt-0`} style={{ left: sidebarWidth === 'w-64' ? '16rem' : '5rem', marginTop: '4rem' }}>
+        <div className="flex items-center gap-6">
+          <button onClick={() => setGlobalSearchActive(true)} className="flex items-center gap-2 text-slate-400 hover:text-red-600 transition-colors group">
+            <Search className="w-4 h-4" />
+            <span className="text-[10px] font-bold uppercase group-hover:text-red-600">Global Search</span>
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <button className="relative p-2 text-slate-400 hover:text-slate-900 transition-colors">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-red-600 rounded-full border-2 border-white"></span>
+          </button>
+          <button onClick={() => setHelpPanelOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">
+            <HelpCircle className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      <main className={`flex-1 ${mainMargin} pt-36 pb-12 px-8 transition-all duration-300`}>
         <div className="max-w-7xl mx-auto">
-          {currentView === 'Add borrower' ? (
-            <AddBorrowerPage user={user} onBack={() => setCurrentView('overview')} />
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h1 className="text-2xl font-serif font-bold text-slate-900">Admin Console</h1>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <MapPin className="w-3 h-3 text-red-600" />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global Overview • Nchelenge Branch</span>
-                  </div>
-                </div>
-                <div className="flex space-x-3">
-                  <button className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-[10px] font-bold uppercase tracking-widest shadow-sm hover:bg-slate-50">Generate Report</button>
-                  <button 
-                    onClick={() => setCurrentView('Add borrower')}
-                    className="px-4 py-2 rounded-lg bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-red-200 hover:bg-black transition-all"
-                  >+ Add New Borrower</button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <StatsCard icon={<Users className="w-6 h-6"/>} title="Total Borrowers" value="1,284" />
-                <StatsCard icon={<Wallet className="w-6 h-6"/>} title="Portfolio Growth" value="+22.4%" color="green" />
-                <StatsCard icon={<Clock className="w-6 h-6"/>} title="Arrears Aging" value="K 42,500" color="orange" />
-                <StatsCard icon={<CheckCircle className="w-6 h-6"/>} title="Approval Rate" value="94.2%" color="red-filled" />
-              </div>
-
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
-                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Recent Loan Requests</h2>
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                        <input type="text" placeholder="Search..." className="pl-8 pr-4 py-1.5 rounded-full bg-slate-100 text-[10px] focus:outline-none focus:ring-1 focus:ring-red-600 w-48" />
-                        <Users className="w-3 h-3 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    </div>
-                    <button onClick={fetchApplications} className="text-red-600 hover:text-black text-[10px] font-black uppercase tracking-widest">Refresh View</button>
-                  </div>
-                </div>
-                <ApplicationTable loading={loading} applications={applications} isEmployer={true} updateStatus={updateStatus} />
-              </div>
-            </>
-          )}
+          {renderContent()}
         </div>
       </main>
-      
+
+      {/* Receive Payment Modal */}
+      {showPaymentWidget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-fade-in-up">
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-slate-900">Receive Payment</h3>
+                  <p className="text-[10px] font-bold text-red-600 uppercase mt-1">Operational Module</p>
+                </div>
+                <button onClick={() => setShowPaymentWidget(false)} className="p-2 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-600 transition-all shadow-sm"><X className="w-5 h-5" /></button>
+              </div>
+              <form className="p-8 space-y-6" onSubmit={(e) => { e.preventDefault(); alert('Payment Recorded Successfully'); setShowPaymentWidget(false); }}>
+                <div className="space-y-4">
+                   <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">Search Customer Or Loan ID</label>
+                      <input type="text" placeholder="e.g. LN-4042-01 or John Doe" className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none focus:ring-1 focus:ring-red-600" />
+                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">Amount Received</label>
+                        <div className="flex rounded-xl overflow-hidden border border-slate-200">
+                          <span className="bg-slate-50 px-3 flex items-center text-[13px] font-bold text-slate-500 border-r border-slate-200">K</span>
+                          <input type="number" step="0.1" placeholder="0.0" className="w-full px-4 py-3 text-[13px] outline-none font-normal" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">Payment Method</label>
+                        <select className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none focus:ring-1 focus:ring-red-600">
+                          <option>Airtel Money</option>
+                          <option>MTN MoMo</option>
+                          <option>Bank Transfer</option>
+                          <option>Cash</option>
+                        </select>
+                      </div>
+                   </div>
+                   <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">Reference Number</label>
+                      <input type="text" placeholder="TX-998273645" className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none focus:ring-1 focus:ring-red-600" />
+                   </div>
+                </div>
+                <div className="pt-4 flex gap-4">
+                  <button type="button" onClick={() => setShowPaymentWidget(false)} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-[10px] font-bold uppercase text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
+                  <button type="submit" className="flex-[2] py-3.5 rounded-xl bg-red-600 text-white text-[10px] font-bold uppercase shadow-xl shadow-red-200 hover:bg-black transition-all">Submit Payment</button>
+                </div>
+              </form>
+           </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -297,849 +459,223 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   );
 };
 
-// --- ADD BORROWER PAGE COMPONENT ---
+// --- Dashboard Component Internals ---
+
+const KPICard = ({ title, value, icon, color }: any) => {
+  const colorMap: any = {
+    blue: 'bg-blue-50 text-blue-600',
+    green: 'bg-green-50 text-green-600',
+    yellow: 'bg-yellow-50 text-yellow-600',
+    red: 'bg-red-50 text-red-600',
+  };
+  return (
+    <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+      <div className={`w-10 h-10 rounded-xl ${colorMap[color]} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+        {React.cloneElement(icon, { className: 'w-5 h-5' })}
+      </div>
+      <p className="text-[11px] font-bold text-black uppercase mb-1">{title}</p>
+      <p className="text-[14px] font-normal text-slate-600">{value}</p>
+    </div>
+  );
+};
+
+const ActionButton = ({ icon, label, onClick, color = 'blue' }: any) => {
+  const baseColor = color === 'red' ? 'text-red-600' : 'text-slate-600';
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-4 p-3.5 rounded-2xl border border-slate-100 transition-all ${baseColor} hover:bg-slate-100`}>
+      <div className="p-2 bg-slate-50 rounded-lg transition-colors">
+        {React.cloneElement(icon, { className: 'w-4 h-4' })}
+      </div>
+      <span className="text-[11px] font-bold uppercase tracking-normal">{label}</span>
+    </button>
+  );
+};
+
+const ActiveLoansTable = ({ applications, onAction }: any) => {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-slate-50/50 text-slate-400 text-[8px] font-bold uppercase">
+            <th className="px-8 py-4">Loan ID</th>
+            <th className="px-8 py-4">Customer</th>
+            <th className="px-8 py-4">Amount</th>
+            <th className="px-8 py-4">Balance</th>
+            <th className="px-8 py-4">Due Date</th>
+            <th className="px-8 py-4">Status</th>
+            <th className="px-8 py-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {applications.map((app: any) => (
+            <tr key={app.id} className="hover:bg-slate-50/30 transition-colors">
+              <td className="px-8 py-4 text-[12px] font-mono text-slate-500">LN-{app.id.substring(0,4)}</td>
+              <td className="px-8 py-4">
+                <p className="text-[12px] font-bold text-slate-900">{app.customer_name}</p>
+                <p className="text-[8px] text-slate-400 font-medium">Verified Profile</p>
+              </td>
+              <td className="px-8 py-4 text-[13px] font-normal text-slate-900">K {app.amount.toLocaleString()}</td>
+              <td className="px-8 py-4 text-[13px] font-bold text-red-600">K {app.balance?.toLocaleString()}</td>
+              <td className="px-8 py-4 text-[11px] font-normal text-slate-500">{new Date(app.due_date).toLocaleDateString()}</td>
+              <td className="px-8 py-4">
+                <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                  app.status === 'Approved' ? 'bg-green-50 text-green-600' : app.status === 'Pending' ? 'bg-yellow-50 text-yellow-600' : 'bg-slate-100 text-slate-400'
+                }`}>
+                  {app.status === 'Approved' ? 'Active' : app.status === 'Pending' ? 'Due Soon' : 'Closed'}
+                </span>
+              </td>
+              <td className="px-8 py-4 text-right">
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => onAction('ReceivePayment')} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 transition-all rounded-lg"><History className="w-4 h-4" /></button>
+                  <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 transition-all rounded-lg"><Eye className="w-4 h-4" /></button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const OverdueRow = ({ name, days, balance, risk }: any) => {
+  const riskColor = risk === 'High' ? 'text-red-600' : risk === 'Medium' ? 'text-orange-500' : 'text-yellow-600';
+  return (
+    <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-50 hover:border-red-100 hover:bg-slate-100 transition-all group">
+      <div>
+        <p className="text-[12px] font-bold text-slate-900">{name}</p>
+        <p className="text-[9px] text-slate-400 font-bold uppercase">{days} Days Overdue</p>
+      </div>
+      <div className="text-right">
+        <p className="text-[12px] font-black text-slate-900">{balance}</p>
+        <p className={`text-[9px] font-bold uppercase ${riskColor}`}>{risk} Risk</p>
+      </div>
+    </div>
+  );
+};
+
+const NotificationItem = ({ type, text, time }: any) => (
+  <div className="flex items-start gap-4 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group">
+    <div className="mt-1 w-1.5 h-1.5 rounded-full bg-red-600"></div>
+    <div>
+      <p className="text-[11px] font-bold text-slate-900 group-hover:text-red-600 transition-colors">{text}</p>
+      <p className="text-[9px] text-slate-400 font-normal">{time} • {type}</p>
+    </div>
+  </div>
+);
+
+// --- Sub-Pages ---
+
+const BorrowerListPage = ({ onViewBorrower, onBack }: { onViewBorrower: (b: Borrower) => void, onBack: () => void }) => {
+  const mockBorrowers: Borrower[] = [
+    { id: '1', customerNumber: 'CUST-100224-0001', fullName: 'Moses Mulenga', gender: 'Male', dob: '1985-05-12', nrc: '456789/11/1', phone: '976853030', email: 'moses.m@test.com', address: 'Plot 12, Chililabombwe', employmentType: 'Employed', status: 'Current', branch: 'Nchelenge' },
+    { id: '2', customerNumber: 'CUST-110224-0002', fullName: 'Agness Chama', gender: 'Female', dob: '1992-08-22', nrc: '123456/10/1', phone: '965443322', email: 'agness.c@test.com', address: 'House 4, Mwansabombwe', employmentType: 'Self-employed', status: 'In arrears', branch: 'Nchelenge' },
+  ];
+  return (
+    <div className="animate-fade-in-up">
+      <div className="flex items-center justify-between mb-8">
+        <div><h1 className="text-2xl font-serif font-bold text-slate-900">Borrower Directory</h1></div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase transition-colors flex items-center gap-1 hover:bg-slate-100 px-2 py-1 rounded-lg"><ArrowLeft className="w-3 h-3" /> Back To Map</button>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+           <div className="relative flex-1 max-md:max-w-md">
+              <input type="text" placeholder="Search..." className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border-none text-[12px] font-normal outline-none focus:ring-1 focus:ring-red-600" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+           </div>
+           <button className="p-2 text-slate-400 hover:text-red-600 border border-slate-100 rounded-lg hover:bg-slate-100"><Filter className="w-4 h-4" /></button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50/50 text-slate-400 text-[9px] font-bold uppercase">
+                <th className="px-8 py-4">Borrower Info</th><th className="px-8 py-4">ID / NRC</th><th className="px-8 py-4">Phone</th><th className="px-8 py-4">Status</th><th className="px-8 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockBorrowers.map((borrower) => (
+                <tr key={borrower.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-8 py-4"><p className="text-[13px] font-bold text-slate-900">{borrower.fullName}</p></td>
+                  <td className="px-8 py-4 text-[11px] text-slate-600 font-normal">{borrower.nrc}</td>
+                  <td className="px-8 py-4 text-[11px] text-slate-600 font-normal">+260 {borrower.phone}</td>
+                  <td className="px-8 py-4"><span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${borrower.status === 'Current' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{borrower.status}</span></td>
+                  <td className="px-8 py-4 text-right"><button onClick={() => onViewBorrower(borrower)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-bold uppercase text-slate-600 hover:border-red-600 hover:text-red-600 hover:bg-slate-100">View Profile</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BorrowerProfilePage = ({ borrower, user, onBack }: { borrower: Borrower, user: any, onBack: () => void }) => {
+  const [activeTab, setActiveTab] = useState('All');
+  const tabs = ['All', 'Loans', 'Repayments', 'Savings', 'Investments', 'Documents', 'Activity History'];
+  const labelClass = "text-[9px] font-bold uppercase text-slate-400 mb-1";
+  const valueClass = "text-[12px] text-slate-900 font-medium";
+  return (
+    <div className="animate-fade-in-up">
+      <div className="flex items-center justify-between mb-8">
+        <div><h1 className="text-2xl font-serif font-bold text-slate-900">Borrower Profile</h1></div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1 hover:bg-slate-100 px-2 py-1 rounded-lg"><ArrowLeft className="w-3 h-3" /> Back To Directory</button>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8 p-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div><p className={labelClass}>Customer Number</p><p className="text-base font-mono text-red-600 font-normal">{borrower.customerNumber}</p></div>
+          <div><p className={labelClass}>Full Name</p><p className={valueClass}>{borrower.fullName}</p></div>
+          <div><p className={labelClass}>Status</p><span className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[9px] font-bold uppercase ${borrower.status === 'Current' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{borrower.status}</span></div>
+          <div><p className={labelClass}>Contact Details</p><p className={valueClass}>+260 {borrower.phone}</p></div>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-8 bg-slate-100 p-1.5 rounded-2xl w-fit">
+        {tabs.map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase transition-all ${activeTab === tab ? 'bg-white text-red-600 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}>{tab}</button>
+        ))}
+      </div>
+      <div className="space-y-8 pb-12">
+        {(activeTab === 'All' || activeTab === 'Loans') && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
+             <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between"><h3 className="text-xs font-bold text-slate-900 uppercase">Active Loans</h3></div>
+             <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[9px] font-bold uppercase text-slate-400"><tr><th className="px-8 py-4">Loan ID</th><th className="px-8 py-4">Principal</th><th className="px-8 py-4">Status</th></tr></thead>
+                <tbody className="divide-y divide-slate-100"><tr className="hover:bg-slate-50/30"><td className="px-8 py-4 text-[12px] font-mono font-normal">LN-4042-01</td><td className="px-8 py-4 text-[13px] font-medium">K 15,000.00</td><td className="px-8 py-4"><span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 text-[9px] font-bold uppercase">Disbursed</span></td></tr></tbody>
+             </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AddBorrowerPage = ({ user, onBack }: { user: any, onBack: () => void }) => {
-  const [customerType, setCustomerType] = useState('');
-  const [docType, setDocType] = useState('');
-  const [paymentFrequency, setPaymentFrequency] = useState('');
-
-  // INITIAL STATE WITH EMPTY FIELDS
-  const initialForm = {
-    fullName: '',
-    nationality: '',
-    gender: '',
-    nrc: '',
-    primaryPhone: '',
-    email: '',
-    nokName: '',
-    nokPhone: '',
-    employerName: '',
-    jobTitle: '',
-    employmentType: '',
-    employmentDate: '',
-    contractStartDate: '',
-    contractEndDate: '',
-    workStation: '',
-    employeeNo: '',
-    businessName: '',
-    businessType: '',
-    monthlyIncome: '',
-    loanAmount: '',
-    loanPurpose: '',
-    loanPeriod: '',
-    paymentFreqOther: '',
-    bankName: '',
-    bankBranch: '',
-    sortCode: '',
-    accountNumber: '',
-    mmNumber: '',
-    mmRegisteredName: '',
-    houseNumber: '',
-    district: '',
-    province: '',
-  };
-
-  const [form, setForm] = useState(initialForm);
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // SYSTEM GENERATED CUSTOMER NUMBER (READ-ONLY)
-  const customerNumber = useMemo(() => {
-    const today = new Date();
-    const d = String(today.getDate()).padStart(2, '0');
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const y = today.getFullYear();
-    return `${d}${m}${y}0001`; 
-  }, []);
-
-  // FORMATTERS & VALIDATORS
-  const handleTypedInput = (key: string, val: string, isEmail: boolean = false) => {
-    const processedValue = isEmail ? val.toLowerCase() : val.toUpperCase();
-    setForm(prev => ({ ...prev, [key]: processedValue }));
-  };
-
-  const handleNameInput = (key: string, val: string) => {
-    const clean = val.replace(/[^a-zA-Z\s]/g, '').toUpperCase();
-    setForm(prev => ({ ...prev, [key]: clean }));
-  };
-
-  const handleEmailChange = (val: string) => {
-    const clean = val.toLowerCase();
-    setForm(prev => ({ ...prev, email: clean }));
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (val && !re.test(val)) {
-      setErrors(prev => ({ ...prev, email: 'Invalid email format' }));
-    } else {
-      setErrors(prev => {
-        const n = { ...prev };
-        delete n.email;
-        return n;
-      });
-    }
-  };
-
-  const handleNRCChange = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    if (clean.length > 9) clean = clean.substring(0, 9);
-    let formatted = '';
-    for (let i = 0; i < clean.length; i++) {
-      if (i === 6 || i === 8) formatted += '/';
-      formatted += clean[i];
-    }
-    setForm(prev => ({ ...prev, nrc: formatted }));
-  };
-
-  const handlePhoneChange = (key: string, val: string) => {
-    const clean = val.replace(/\D/g, '');
-    if (clean.length <= 9) {
-      setForm(prev => ({ ...prev, [key]: clean }));
-    }
-  };
-
-  const handleEmployeeNoChange = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    if (clean.length > 8) clean = clean.substring(0, 8);
-    setForm(prev => ({ ...prev, employeeNo: clean }));
-    if (clean && (clean.length !== 8 || !clean.startsWith('00'))) {
-      setErrors(prev => ({ ...prev, employeeNo: 'Must be 8 digits starting with 00' }));
-    } else {
-      setErrors(prev => {
-        const n = { ...prev };
-        delete n.employeeNo;
-        return n;
-      });
-    }
-  };
-
-  const handleCurrencyChange = (key: string, val: string) => {
-    const clean = val.replace(/\D/g, '');
-    setForm(prev => ({ ...prev, [key]: clean }));
-  };
-
-  const formatCurrency = (val: string) => {
-    if (!val) return '';
-    return `K ${Number(val).toLocaleString()}`;
-  };
-
-  const handleNumericChange = (key: string, val: string, maxLen: number) => {
-    const clean = val.replace(/\D/g, '');
-    if (clean.length <= maxLen) {
-      setForm(prev => ({ ...prev, [key]: clean }));
-    }
-  };
-
-  const padAccountNumber = () => {
-    if (form.accountNumber && form.accountNumber.length < 13) {
-      setForm(prev => ({ ...prev, accountNumber: prev.accountNumber.padStart(13, '0') }));
-    }
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const isBankValid = form.accountNumber.length === 13 && form.sortCode.length === 6;
-    const isMMValid = form.mmNumber.length === 9 && form.mmRegisteredName.length > 0;
-
-    if (!isBankValid || !isMMValid) {
-      alert("Error: Complete both Bank and Mobile Money accounts accurately.");
-      return;
-    }
-    
-    // SAVE LOGIC
-    alert(`Success! Borrower ${form.fullName} saved with Number ${customerNumber}`);
-    
-    // CLEAR ALL FIELDS
-    setForm(initialForm);
-    setCustomerType('');
-    setDocType('');
-    setPaymentFrequency('');
-    
-    // REDIRECT TO HOME BRANCH (OVERVIEW)
-    onBack();
-  };
-
-  // UI styling components - INCREASED FONT SIZE BY +2
-  const labelClass = "text-[14px] text-black font-normal normal-case mb-1.5 block";
-  const inputClass = "w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] text-slate-700 font-normal outline-none focus:ring-1 focus:ring-red-600 transition-all uppercase placeholder:normal-case";
-  
-  // Specific audit section styling - FONT SIZES REDUCED PER SPEC
-  const auditLabelClass = "text-[11px] text-black font-normal uppercase mb-0.5";
-  const auditDetailClass = "text-[8px] text-slate-500 uppercase font-normal tracking-widest";
+  const [form, setForm] = useState({ fullName: '', nrc: '', phone: '' });
+  const handleSave = (e: React.FormEvent) => { e.preventDefault(); alert(`Borrower Saved Successfully`); onBack(); };
+  const labelClass = "text-[12px] text-slate-700 font-normal mb-1 block";
+  const inputClass = "w-full px-4 py-3 rounded-xl border border-slate-200 text-xs font-normal outline-none focus:ring-1 focus:ring-red-600 transition-all placeholder:text-slate-300";
 
   return (
-    <div className="min-h-screen bg-slate-100/50 py-10 px-4">
+    <div className="min-h-screen py-10 px-4">
       <div className="max-w-2xl mx-auto mb-6 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <h1 className="text-xl font-serif font-bold text-slate-900">Add Borrower Record</h1>
-          <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border border-red-100">Portal</span>
-        </div>
-        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase tracking-widest transition-colors flex items-center gap-1">
-          <ArrowLeft className="w-3 h-3" /> Back
-        </button>
+        <h1 className="text-2xl font-serif font-bold text-slate-900">Add Borrower Record</h1>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1 hover:bg-slate-100 px-2 py-1 rounded-lg"><ArrowLeft className="w-3 h-3" /> Back</button>
       </div>
-
-      <div className="max-w-2xl mx-auto bg-white rounded-[1.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-fade-in-up">
-        <form onSubmit={handleSave} className="p-8 space-y-12">
-          
-          {/* CUSTOMER NUMBER HEADER */}
-          <section className="bg-red-600 -mx-8 -mt-8 p-6 mb-8 text-white flex justify-between items-center border-b border-white/10">
-             <div>
-                <p className="text-[11px] font-bold text-white uppercase tracking-[0.2em] mb-1">Customer Number</p>
-                <h4 className="text-lg font-mono font-normal text-white">{customerNumber}</h4>
-             </div>
-             <Shield className="w-6 h-6 text-white/40" />
-          </section>
-
-          {/* SECTION 1: IDENTITY DETAILS */}
-          <section className="space-y-6">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <User className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Identity details</h3>
-            </div>
-            
-            <div className="space-y-5">
-              <div>
-                <label className={labelClass}>Full name (NRC/ID)</label>
-                <input 
-                  type="text" required
-                  placeholder="Enter full legal name" 
-                  value={form.fullName}
-                  onChange={(e) => handleNameInput('fullName', e.target.value)}
-                  className={inputClass} 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>NRC number</label>
-                  <input 
-                    type="text" required
-                    placeholder="123456/12/1" 
-                    value={form.nrc}
-                    onChange={(e) => handleNRCChange(e.target.value)}
-                    className={`${inputClass} font-mono tracking-widest`} 
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Nationality</label>
-                  <input 
-                    type="text" required
-                    value={form.nationality}
-                    onChange={(e) => handleNameInput('nationality', e.target.value)}
-                    className={inputClass} 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Gender</label>
-                  <select 
-                    required
-                    value={form.gender}
-                    onChange={(e) => setForm(prev => ({ ...prev, gender: e.target.value }))}
-                    className={`${inputClass} !normal-case`}
-                  >
-                     <option value="">Select gender</option>
-                     <option value="Male">Male</option>
-                     <option value="Female">Female</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Phone number (+260)</label>
-                  <div className="flex shadow-sm rounded-xl overflow-hidden border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-red-600">
-                    <span className="flex items-center px-4 bg-slate-50 text-[13px] font-normal text-slate-400 border-r border-slate-200">+260</span>
-                    <input 
-                      type="tel" required
-                      value={form.primaryPhone}
-                      onChange={(e) => handlePhoneChange('primaryPhone', e.target.value)}
-                      placeholder="9 digits" 
-                      className="w-full px-4 py-3 text-[13px] text-slate-700 font-normal outline-none uppercase" 
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className={labelClass}>Email address</label>
-                <input 
-                  type="email" required
-                  value={form.email}
-                  onChange={(e) => handleEmailChange(e.target.value)}
-                  placeholder="lowercase@domain.com" 
-                  className={`${inputClass} lowercase !font-normal`} 
-                />
-                {errors.email && <p className="text-[12px] text-red-500 font-normal mt-1">{errors.email}</p>}
-              </div>
-            </div>
-          </section>
-
-          {/* CUSTOMER RESIDENTIAL ADDRESS */}
-          <section className="space-y-6">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <MapPin className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Customer residential address</h3>
-            </div>
-            
-            <div className="space-y-5">
-              <div>
-                <label className={labelClass}>House number</label>
-                <input 
-                  type="text" required
-                  placeholder="Enter house number" 
-                  value={form.houseNumber}
-                  onChange={(e) => handleTypedInput('houseNumber', e.target.value)}
-                  className={inputClass} 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>District</label>
-                  <input 
-                    type="text" required
-                    placeholder="Enter district" 
-                    value={form.district}
-                    onChange={(e) => handleTypedInput('district', e.target.value)}
-                    className={inputClass} 
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Province</label>
-                  <input 
-                    type="text" required
-                    placeholder="Enter province" 
-                    value={form.province}
-                    onChange={(e) => handleTypedInput('province', e.target.value)}
-                    className={inputClass} 
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* SECTION 2: VERIFICATION DOCUMENTS */}
-          <section className="space-y-6">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <Fingerprint className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Verification documents</h3>
-            </div>
-            
-            <div className="space-y-4">
-               <div>
-                 <label className={labelClass}>Document type</label>
-                 <select 
-                   required
-                   value={docType}
-                   onChange={(e) => setDocType(e.target.value)}
-                   className={`${inputClass} !normal-case`}
-                 >
-                    <option value="">Select document type</option>
-                    <option value="NRC (front & back)">NRC (front & back)</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Driver’s license">Driver’s license</option>
-                 </select>
-               </div>
-
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 {docType.includes('NRC') ? (
-                   <>
-                     <div className="border-2 border-dashed border-slate-100 rounded-xl p-4 flex flex-col items-center justify-center space-y-2 bg-slate-50 hover:border-red-600 cursor-pointer group">
-                        <Upload className="w-5 h-5 text-slate-300 group-hover:text-red-600" />
-                        <span className="text-[12px] font-normal uppercase text-slate-400">NRC front</span>
-                     </div>
-                     <div className="border-2 border-dashed border-slate-100 rounded-xl p-4 flex flex-col items-center justify-center space-y-2 bg-slate-50 hover:border-red-600 cursor-pointer group">
-                        <Upload className="w-5 h-5 text-slate-300 group-hover:text-red-600" />
-                        <span className="text-[12px] font-normal uppercase text-slate-400">NRC back</span>
-                     </div>
-                   </>
-                 ) : (
-                   <div className="col-span-2 border-2 border-dashed border-slate-100 rounded-xl p-6 flex flex-col items-center justify-center space-y-2 bg-slate-50 hover:border-red-600 cursor-pointer group">
-                      <Upload className="w-6 h-6 text-slate-300 group-hover:text-red-600" />
-                      <span className="text-[13px] font-normal uppercase text-slate-400">Document photo</span>
-                   </div>
-                 )}
-               </div>
-            </div>
-          </section>
-
-          {/* SECTION 3: EMPLOYMENT DETAILS - REMOVED RED BORDER */}
-          <section className="space-y-6 transition-all duration-300">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <Briefcase className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Employment details</h3>
-            </div>
-            
-            <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
-                <button 
-                  type="button"
-                  onClick={() => setCustomerType('Employed')}
-                  className={`flex-1 py-2 rounded-lg text-[12px] font-normal uppercase transition-all ${customerType === 'Employed' ? 'bg-red-600 text-white shadow-sm' : 'text-slate-500'}`}
-                >Employed</button>
-                <button 
-                  type="button"
-                  onClick={() => setCustomerType('Self-employed')}
-                  className={`flex-1 py-2 rounded-lg text-[12px] font-normal uppercase transition-all ${customerType === 'Self-employed' ? 'bg-red-600 text-white shadow-sm' : 'text-slate-500'}`}
-                >Self-employed / business owner</button>
-            </div>
-
-            <div className="space-y-6 animate-fade-in">
-              {customerType === 'Employed' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Employer name</label>
-                      <input 
-                        type="text" required
-                        placeholder="Company name" 
-                        value={form.employerName}
-                        onChange={(e) => handleNameInput('employerName', e.target.value)}
-                        className={inputClass} 
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Job title</label>
-                      <input 
-                        type="text" required
-                        placeholder="Current role"
-                        value={form.jobTitle}
-                        onChange={(e) => handleNameInput('jobTitle', e.target.value)}
-                        className={inputClass} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Employment type</label>
-                      <select 
-                        required
-                        value={form.employmentType}
-                        onChange={(e) => setForm(prev => ({ ...prev, employmentType: e.target.value }))}
-                        className={`${inputClass} !normal-case`}
-                      >
-                         <option value="">Select type</option>
-                         <option value="Permanent">Permanent</option>
-                         <option value="Contract">Contract</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>Work station</label>
-                      <input 
-                        type="text" required
-                        value={form.workStation}
-                        onChange={(e) => handleTypedInput('workStation', e.target.value)}
-                        placeholder="work station / department"
-                        className={inputClass} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                    {form.employmentType === 'Permanent' && (
-                      <div>
-                        <label className={labelClass}>Employment date</label>
-                        <input 
-                          type="date" required
-                          value={form.employmentDate}
-                          onChange={(e) => setForm(prev => ({ ...prev, employmentDate: e.target.value }))}
-                          className={inputClass}
-                        />
-                      </div>
-                    )}
-                    {form.employmentType === 'Contract' && (
-                      <>
-                        <div>
-                          <label className={labelClass}>Contract start date</label>
-                          <input 
-                            type="date" required
-                            value={form.contractStartDate}
-                            onChange={(e) => setForm(prev => ({ ...prev, contractStartDate: e.target.value }))}
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Contract end date</label>
-                          <input 
-                            type="date" required
-                            value={form.contractEndDate}
-                            onChange={(e) => setForm(prev => ({ ...prev, contractEndDate: e.target.value }))}
-                            className={inputClass}
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Employee number (8 digits starting with 00)</label>
-                    <input 
-                      type="text" required
-                      value={form.employeeNo}
-                      onChange={(e) => handleEmployeeNoChange(e.target.value)}
-                      placeholder="00xxxxxx"
-                      className={`${inputClass} font-mono tracking-widest`} 
-                    />
-                    {errors.employeeNo && <p className="text-[12px] text-red-500 font-normal mt-1">{errors.employeeNo}</p>}
-                  </div>
-                </>
-              )}
-              {customerType === 'Self-employed' && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Business name</label>
-                      <input 
-                        type="text" required
-                        value={form.businessName}
-                        onChange={(e) => handleNameInput('businessName', e.target.value)}
-                        className={inputClass} 
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Type of business</label>
-                      <input 
-                        type="text" required
-                        value={form.businessType}
-                        onChange={(e) => handleNameInput('businessType', e.target.value)}
-                        className={inputClass} 
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelClass}>Monthly income</label>
-                    <div className="flex shadow-sm rounded-xl overflow-hidden border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-red-600">
-                      <span className="bg-slate-50 px-4 flex items-center text-[13px] font-normal text-slate-400 border-r border-slate-200 tracking-widest">K</span>
-                      <input 
-                        type="text" required
-                        value={form.monthlyIncome}
-                        onChange={(e) => handleCurrencyChange('monthlyIncome', e.target.value)}
-                        placeholder="0.00"
-                        className="w-full px-4 py-3 text-[13px] text-slate-700 font-normal outline-none uppercase" 
-                      />
-                    </div>
-                    {form.monthlyIncome && <p className="text-[12px] font-normal text-red-600 mt-1">{formatCurrency(form.monthlyIncome)}</p>}
-                  </div>
-                  <div>
-                    <label className={labelClass}>PACRA registration certificate</label>
-                    <div className="border-2 border-dashed border-slate-100 rounded-xl p-4 flex flex-col items-center justify-center space-y-2 bg-slate-50 hover:border-red-600 cursor-pointer group">
-                      <Upload className="w-5 h-5 text-slate-300 group-hover:text-red-600" />
-                      <span className="text-[10px] font-normal uppercase text-slate-400">PACRA registration certificate</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* SECTION 4: CUSTOMER ACCOUNTS */}
-          <section className="space-y-8">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <CreditCard className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Customer accounts</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-10">
-              <div className="space-y-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Building className="w-3 h-3" /> Bank account</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>Bank name</label>
-                    <input 
-                      type="text" required placeholder="e.g. Absa"
-                      value={form.bankName} onChange={(e) => handleTypedInput('bankName', e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Branch</label>
-                    <input 
-                      type="text" required placeholder="Branch name"
-                      value={form.bankBranch} onChange={(e) => handleTypedInput('bankBranch', e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Account number</label>
-                    <input 
-                      type="text" required
-                      value={form.accountNumber}
-                      onChange={(e) => handleNumericChange('accountNumber', e.target.value, 13)}
-                      onBlur={padAccountNumber}
-                      placeholder="0000000000000"
-                      className={`${inputClass} font-mono tracking-widest`}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Sort code</label>
-                    <input 
-                      type="text" required
-                      value={form.sortCode}
-                      onChange={(e) => handleNumericChange('sortCode', e.target.value, 6)}
-                      placeholder="6 digits"
-                      className={`${inputClass} font-mono tracking-widest`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Smartphone className="w-3 h-3" /> Mobile money</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>Account number (+260)</label>
-                    <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white">
-                      <span className="bg-slate-200 px-3 flex items-center text-[13px] font-normal text-slate-500 border-r border-slate-200">+260</span>
-                      <input 
-                        type="tel" required
-                        value={form.mmNumber}
-                        onChange={(e) => handlePhoneChange('mmNumber', e.target.value)}
-                        placeholder="9 digits"
-                        className="w-full px-3 py-2 text-[13px] text-slate-700 font-normal outline-none bg-white uppercase"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelClass}>Registered name</label>
-                    <input 
-                      type="text" required placeholder="Name registered to this account"
-                      value={form.mmRegisteredName} onChange={(e) => handleNameInput('mmRegisteredName', e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* SECTION 5: NEXT OF KIN */}
-          <section className="space-y-6">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <HeartHandshake className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Next of kin</h3>
-            </div>
-            
-            <div className="space-y-4">
-               <div>
-                 <label className={labelClass}>Full name</label>
-                 <input 
-                   type="text" required
-                   value={form.nokName}
-                   onChange={(e) => handleNameInput('nokName', e.target.value)}
-                   className={inputClass} 
-                 />
-               </div>
-               <div>
-                 <label className={labelClass}>Phone number (+260)</label>
-                 <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white">
-                    <span className="bg-slate-50 px-4 flex items-center text-[13px] font-normal text-slate-400 border-r border-slate-200">+260</span>
-                    <input 
-                      type="tel" required
-                      value={form.nokPhone}
-                      onChange={(e) => handlePhoneChange('nokPhone', e.target.value)}
-                      className="w-full px-4 py-3 text-[13px] text-slate-700 font-normal outline-none bg-white uppercase" 
-                    />
-                 </div>
-               </div>
-            </div>
-          </section>
-
-          {/* SECTION 6: LOAN REQUEST */}
-          <section className="space-y-6">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-2">
-               <DollarSign className="w-4 h-4 text-red-600" />
-               <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Loan request</h3>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-6">
-               <div>
-                 <label className={labelClass}>Requested amount</label>
-                 <div className="flex rounded-xl overflow-hidden border border-slate-200">
-                    <span className="bg-slate-50 px-4 flex items-center text-[13px] font-normal text-slate-400 border-r border-slate-200 tracking-widest">K</span>
-                    <input 
-                      type="text" required
-                      value={form.loanAmount}
-                      onChange={(e) => handleCurrencyChange('loanAmount', e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-4 py-3 text-[13px] text-slate-700 font-normal outline-none uppercase" 
-                    />
-                 </div>
-                 {form.loanAmount && <p className="text-[10px] font-normal text-red-600 mt-1">{formatCurrency(form.loanAmount)}</p>}
-               </div>
-               <div>
-                 <label className={labelClass}>Loan purpose</label>
-                 <input 
-                   type="text" required
-                   value={form.loanPurpose}
-                   onChange={(e) => handleTypedInput('loanPurpose', e.target.value)}
-                   placeholder="enter loan purpose"
-                   className={inputClass} 
-                 />
-               </div>
-               <div>
-                 <label className={labelClass}>Loan period</label>
-                 <select 
-                   required
-                   value={form.loanPeriod}
-                   onChange={(e) => setForm(prev => ({ ...prev, loanPeriod: e.target.value }))}
-                   className={`${inputClass} !normal-case`}
-                 >
-                    <option value="">Select period</option>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                      <option key={m} value={`${m} month${m > 1 ? 's' : ''}`}>{m} month${m > 1 ? 's' : ''}</option>
-                    ))}
-                 </select>
-               </div>
-               <div>
-                 <label className={labelClass}>Payment frequency</label>
-                 <select 
-                   required
-                   value={paymentFrequency}
-                   onChange={(e) => setPaymentFrequency(e.target.value)}
-                   className={`${inputClass} !normal-case`}
-                 >
-                    <option value="">Select frequency</option>
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                    <option value="Quarterly">Quarterly</option>
-                    <option value="Annually">Annually</option>
-                    <option value="Other">Other</option>
-                 </select>
-               </div>
-            </div>
-            {paymentFrequency === 'Other' && (
-              <div className="animate-fade-in">
-                <label className={labelClass}>Specify frequency</label>
-                <input 
-                  type="text" required
-                  value={form.paymentFreqOther}
-                  onChange={(e) => handleTypedInput('paymentFreqOther', e.target.value)}
-                  placeholder="Specify payment frequency"
-                  className={inputClass}
-                />
-              </div>
-            )}
-          </section>
-
-          {/* AUDIT TRAIL - REDUCED FONT SIZES */}
-          <section className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-200 space-y-4">
-             <div className="flex items-center gap-2 mb-2">
-                <UserCheck className="w-4 h-4 text-slate-900" />
-                <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">Recorded and verified by</h4>
-             </div>
-             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                   <p className={auditLabelClass}>Full name</p>
-                   <p className={auditDetailClass}>{user.user_metadata?.full_name || 'System Admin'}</p>
-                </div>
-                <div>
-                   <p className={auditLabelClass}>Email address</p>
-                   <p className={auditDetailClass}>{user.email}</p>
-                </div>
-                <div>
-                   <p className={auditLabelClass}>Employee number</p>
-                   <p className={auditDetailClass}>{user.user_metadata?.employee_number || 'N/A'}</p>
-                </div>
-                <div>
-                   <p className={auditLabelClass}>Position / role</p>
-                   <p className="text-red-600 text-[8px] uppercase font-normal tracking-widest">{user.user_metadata?.role || 'Administrator'}</p>
-                </div>
-             </div>
-          </section>
-
-          <div className="pt-8 flex items-center justify-between">
-             <button 
-              type="button" 
-              onClick={onBack}
-              className="px-6 py-3 rounded-xl border border-slate-200 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
-             >
-               Discard
-             </button>
-             <button 
-              type="submit" 
-              className="px-10 py-4 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase tracking-widest shadow-xl shadow-red-200 hover:bg-black transition-all active:scale-95"
-             >
-               Save
-             </button>
+      <div className="max-w-2xl mx-auto bg-white rounded-[2rem] shadow-2xl border border-slate-200 p-10 animate-fade-in-up">
+        <form onSubmit={handleSave} className="space-y-6">
+          <div>
+            <label className={labelClass}>Full Name</label>
+            <input type="text" value={form.fullName} onChange={(e) => setForm({...form, fullName: e.target.value})} className={inputClass} placeholder="John Doe" />
           </div>
-
+          <div>
+            <label className={labelClass}>NRC Number</label>
+            <input type="text" value={form.nrc} onChange={(e) => setForm({...form, nrc: e.target.value})} className={inputClass} placeholder="123456/11/1" />
+          </div>
+          <div className="pt-2">
+            <button type="submit" className="px-12 py-4 rounded-xl bg-red-600 text-white text-[10px] font-bold uppercase shadow-xl hover:bg-black transition-all">Save Borrower</button>
+          </div>
         </form>
       </div>
     </div>
   );
 };
-
-const StatsCard = ({ icon, title, value, color = 'red' }: { icon: any, title: string, value: string, color?: string }) => {
-  const colorStyles: Record<string, string> = {
-    red: 'bg-red-50 text-red-600',
-    orange: 'bg-orange-50 text-orange-500',
-    green: 'bg-green-50 text-green-600',
-    'red-filled': 'bg-red-600 text-white shadow-lg shadow-red-100'
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-5">
-      <div className={`p-3 rounded-xl ${colorStyles[color] || colorStyles.red}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-        <p className="text-xl font-black text-slate-900">{value}</p>
-      </div>
-    </div>
-  );
-};
-
-const ApplicationTable = ({ loading, applications, isEmployer, updateStatus }: { loading: boolean, applications: Application[], isEmployer: boolean, updateStatus: any }) => (
-  <div className="overflow-x-auto">
-    <table className="w-full text-left">
-      <thead>
-        <tr className="bg-slate-50/50 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em]">
-          <th className="px-8 py-4">Borrower Details</th>
-          <th className="px-8 py-4">Principal Amount</th>
-          <th className="px-8 py-4">Status</th>
-          <th className="px-8 py-4">Date Filed</th>
-          <th className="px-8 py-4 text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {loading ? (
-          <tr><td colSpan={5} className="px-8 py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-red-600" /></td></tr>
-        ) : applications.length === 0 ? (
-          <tr><td colSpan={5} className="px-8 py-20 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No active loan records</td></tr>
-        ) : (
-          applications.map((app) => (
-            <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
-              <td className="px-8 py-4">
-                <div className="font-bold text-slate-900">{app.loan_type}</div>
-                <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest truncate max-w-[150px]">{app.purpose}</div>
-              </td>
-              <td className="px-8 py-4 font-black text-slate-900">K {app.amount.toLocaleString()}</td>
-              <td className="px-8 py-4">
-                <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                  app.status === 'Pending' ? 'status-pending' : app.status === 'Approved' ? 'status-approved' : 'status-rejected'
-                }`}>
-                  {app.status}
-                </span>
-              </td>
-              <td className="px-8 py-4 text-[10px] text-slate-600 font-bold">{new Date(app.created_at).toLocaleDateString()}</td>
-              <td className="px-8 py-4 text-right">
-                <div className="flex justify-end space-x-2">
-                  {isEmployer ? (
-                    <>
-                      <button onClick={() => updateStatus(app.id, 'Approved')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Approve"><Check className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => updateStatus(app.id, 'Rejected')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Reject"><Ban className="w-3.5 h-3.5" /></button>
-                    </>
-                  ) : (
-                    <span className="text-[10px] font-bold text-slate-400 italic">No action needed</span>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  </div>
-);
 
 export default Dashboard;
