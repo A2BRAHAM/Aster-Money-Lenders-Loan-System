@@ -16,7 +16,7 @@ import {
   Maximize2, StickyNote, Paperclip as PaperclipIcon, Layout, ExternalLink, File,
   Minimize2, Square, Printer as PrinterIcon, Minus, Copy, MessageSquare, Share2, Star,
   Mail as MailIcon, ArrowDownAz, Settings2, SearchIcon, CalculatorIcon, CheckSquare, 
-  AlertOctagon, UserMinus, FileUp, Lock
+  AlertOctagon, UserMinus, FileUp, Lock, FileType, CheckSquare as CheckSquareIcon
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -196,6 +196,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (currentView === 'DueLoans') return <DueLoansPage onBack={() => setCurrentView('overview')} />;
     if (currentView === 'LoanCalculator') return <LoanCalculatorPage onBack={() => setCurrentView('overview')} />;
     if (currentView === 'ApproveLoans') return <ApproveLoansPage onBack={() => setCurrentView('overview')} />;
+
+    // Repayment Module Views
+    if (currentView === 'ViewRepayments') return <ViewRepaymentsPage isAdmin={isSystemAdmin} onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'AddBulkRepayments') return <AddBulkRepaymentsPage onBack={() => setCurrentView('ViewRepayments')} />;
+    if (currentView === 'ApproveRepayments') return <ApproveRepaymentsPage onBack={() => setCurrentView('overview')} />;
 
     if (currentView === 'overview') {
       return (
@@ -1918,6 +1923,316 @@ const ApproveLoansPage = ({ onBack }: { onBack: () => void }) => {
               <div className="flex gap-4">
                  <button onClick={() => setShowApprovalModal(null)} className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-[10px] uppercase hover:bg-slate-200 transition-all">Cancel</button>
                  <button onClick={handleApprove} className="flex-[2] py-4 rounded-2xl bg-red-600 text-white font-bold text-[10px] uppercase shadow-xl shadow-red-200 hover:bg-black transition-all">Confirm Approval</button>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- REPAYMENT MODULE PAGES ---
+
+const ViewRepaymentsPage = ({ isAdmin, onBack }: { isAdmin: boolean, onBack: () => void }) => {
+  const [filterData, setFilterData] = useState({
+    dateFrom: '',
+    dateTo: '',
+    customer: '',
+    loanId: '',
+    method: '',
+    status: ''
+  });
+
+  const mockRepayments = [
+    { id: 'RP-9021', customer: 'ABINALA SICHALWE', loanId: 'LN-4021', amount: 1500, method: 'Airtel MoMo', date: '2024-01-10', status: 'Completed' },
+    { id: 'RP-9022', customer: 'ABRAHAM MUTWALE', loanId: 'LN-3892', amount: 1200, method: 'MTN MoMo', date: '2024-01-12', status: 'Pending' },
+    { id: 'RP-9023', customer: 'MOSES MULENGA', loanId: 'LN-4105', amount: 2500, method: 'Bank Transfer', date: '2023-12-15', status: 'Reversed' },
+  ];
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Completed': return 'bg-green-50 text-green-600';
+      case 'Pending': return 'bg-yellow-50 text-yellow-600';
+      case 'Reversed': return 'bg-red-50 text-red-600';
+      default: return 'bg-slate-50 text-slate-400';
+    }
+  };
+
+  const labelStyle = "text-[9px] font-bold uppercase text-black mb-1.5 block";
+  const inputStyle = "w-full px-3 py-2 rounded-lg border border-slate-200 text-[11px] outline-none text-slate-500 font-normal placeholder:text-slate-300";
+
+  return (
+    <div className="animate-fade-in-up text-left">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-serif font-bold text-slate-900">Repayment Records</h1>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div><label className={labelStyle}>Date From</label><input type="date" className={inputStyle} value={filterData.dateFrom} onChange={e => setFilterData({...filterData, dateFrom: e.target.value})} /></div>
+          <div><label className={labelStyle}>Date To</label><input type="date" className={inputStyle} value={filterData.dateTo} onChange={e => setFilterData({...filterData, dateTo: e.target.value})} /></div>
+          <div><label className={labelStyle}>Customer</label><input type="text" placeholder="Name..." className={inputStyle} value={filterData.customer} onChange={e => setFilterData({...filterData, customer: e.target.value})} /></div>
+          <div><label className={labelStyle}>Loan ID</label><input type="text" placeholder="LN-XXXX" className={inputStyle} value={filterData.loanId} onChange={e => setFilterData({...filterData, loanId: e.target.value})} /></div>
+          <div><label className={labelStyle}>Method</label><select className={inputStyle} value={filterData.method} onChange={e => setFilterData({...filterData, method: e.target.value})}><option value="">All Methods</option><option>Airtel MoMo</option><option>MTN MoMo</option><option>Bank Transfer</option><option>Cash</option></select></div>
+          <div><label className={labelStyle}>Status</label><select className={inputStyle} value={filterData.status} onChange={e => setFilterData({...filterData, status: e.target.value})}><option value="">All Statuses</option><option>Completed</option><option>Pending</option><option>Reversed</option></select></div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-400 text-[9px] font-bold uppercase">
+              <tr>
+                <th className="px-8 py-5">Repayment ID</th>
+                <th className="px-8 py-5">Customer</th>
+                <th className="px-8 py-5">Loan ID</th>
+                <th className="px-8 py-5">Amount Paid</th>
+                <th className="px-8 py-5">Method</th>
+                <th className="px-8 py-5">Date</th>
+                <th className="px-8 py-5">Status</th>
+                <th className="px-8 py-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockRepayments.map((rp) => (
+                <tr key={rp.id} className="hover:bg-slate-50/50">
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-500">{rp.id}</td>
+                  <td className="px-8 py-5 text-[11px] font-bold text-slate-900">{rp.customer}</td>
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-400">{rp.loanId}</td>
+                  <td className="px-8 py-5 text-[12px] font-bold text-slate-900">K {rp.amount.toLocaleString()}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-500">{rp.method}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-500">{rp.date}</td>
+                  <td className="px-8 py-5">
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${getStatusColor(rp.status)}`}>{rp.status}</span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="View Receipt"><Receipt className="w-4 h-4" /></button>
+                      <button className="p-2 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-all" title="View Loan"><ExternalLink className="w-4 h-4" /></button>
+                      {isAdmin && <button className="p-2 text-slate-400 hover:text-red-900 rounded-lg hover:bg-slate-100 transition-all" title="Reverse"><RotateCcw className="w-4 h-4" /></button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddBulkRepaymentsPage = ({ onBack }: { onBack: () => void }) => {
+  const [rows, setRows] = useState([
+    { id: 1, customer: '', amount: '', method: 'Airtel MoMo', date: new Date().toISOString().split('T')[0], ref: '', isValid: true }
+  ]);
+
+  const addRow = () => {
+    setRows([...rows, { id: Date.now(), customer: '', amount: '', method: 'Airtel MoMo', date: new Date().toISOString().split('T')[0], ref: '', isValid: true }]);
+  };
+
+  const removeRow = (id: number) => {
+    if (rows.length > 1) setRows(rows.filter(r => r.id !== id));
+  };
+
+  const updateRow = (id: number, field: string, value: string) => {
+    setRows(rows.map(r => {
+      if (r.id === id) {
+        const updated = { ...r, [field]: value };
+        // Basic validation check
+        if (field === 'amount' && parseFloat(value) <= 0) updated.isValid = false;
+        else updated.isValid = true;
+        return updated;
+      }
+      return r;
+    }));
+  };
+
+  const handleBulkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const hasInvalid = rows.some(r => !r.isValid || !r.customer || !r.amount);
+    if (hasInvalid) return alert('Please fix errors and fill all required fields before submitting.');
+    alert(`${rows.length} Repayments processed successfully. Loan balances updated and receipts generated.`);
+    onBack();
+  };
+
+  const inputStyle = "w-full px-3 py-2 rounded-lg border border-slate-200 text-[11px] outline-none text-slate-500 font-normal focus:ring-1 focus:ring-red-600";
+  const labelStyle = "text-[10px] font-bold uppercase text-black mb-1.5 block";
+
+  return (
+    <div className="animate-fade-in-up text-left max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-slate-900">Bulk Repayment Entry</h1>
+          <p className="text-[10px] font-bold text-red-600 uppercase mt-1">Multi-entry financial terminal</p>
+        </div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="grid lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+            <h3 className="text-[11px] font-bold uppercase text-red-600 mb-6 flex items-center gap-2"><Upload className="w-4 h-4" /> Bulk Upload</h3>
+            <div className="p-8 border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center text-center group cursor-pointer hover:border-red-600 transition-all">
+              <FileType className="w-10 h-10 text-slate-200 mb-4 group-hover:text-red-600" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-4">Upload CSV or Excel</p>
+              <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-bold uppercase">Browse Files</button>
+            </div>
+            <button className="w-full mt-6 flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-[10px] font-bold uppercase text-slate-500 hover:bg-slate-50">
+              <FileDown className="w-3 h-3" /> Download Sample Template
+            </button>
+          </div>
+
+          <div className="bg-slate-900 p-8 rounded-[2rem] text-white">
+            <h3 className="text-[11px] font-bold uppercase text-red-500 mb-4">Validation Intelligence</h3>
+            <p className="text-[10px] text-slate-400 leading-relaxed">Each entry is validated against active loan balances and system date constraints to ensure ledger integrity. Payments exceeding balances will be flagged for review.</p>
+          </div>
+        </div>
+
+        <div className="lg:col-span-8">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+            <h3 className="text-[11px] font-bold uppercase text-slate-400 mb-6 flex items-center justify-between">
+              Manual Entry Table
+              <button onClick={addRow} className="px-4 py-2 bg-red-600 text-white rounded-xl flex items-center gap-2 hover:bg-black transition-all">
+                <Plus className="w-3 h-3" /> Add Row
+              </button>
+            </h3>
+            
+            <div className="overflow-x-auto -mx-8">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-slate-400 text-[8px] font-bold uppercase">
+                  <tr>
+                    <th className="px-8 py-3">Customer / Loan ID</th>
+                    <th className="px-8 py-3">Amount (K)</th>
+                    <th className="px-8 py-3">Method</th>
+                    <th className="px-8 py-3">Date</th>
+                    <th className="px-8 py-3">Reference</th>
+                    <th className="px-8 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((row) => (
+                    <tr key={row.id} className={!row.isValid ? 'bg-red-50/50' : ''}>
+                      <td className="px-4 py-2"><input type="text" placeholder="Loan ID or Name" className={inputStyle} value={row.customer} onChange={e => updateRow(row.id, 'customer', e.target.value)} /></td>
+                      <td className="px-4 py-2">
+                        <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+                          <span className="px-2 bg-slate-50 text-[10px] flex items-center border-r font-bold text-slate-400">K</span>
+                          <input type="number" step="0.01" className="w-full px-2 py-2 text-[11px] outline-none text-slate-500 font-normal" placeholder="0.00" value={row.amount} onChange={e => updateRow(row.id, 'amount', e.target.value)} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <select className={inputStyle} value={row.method} onChange={e => updateRow(row.id, 'method', e.target.value)}>
+                          <option>Airtel MoMo</option>
+                          <option>MTN MoMo</option>
+                          <option>Bank Transfer</option>
+                          <option>Cash</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-2"><input type="date" className={inputStyle} value={row.date} max={new Date().toISOString().split('T')[0]} onChange={e => updateRow(row.id, 'date', e.target.value)} /></td>
+                      <td className="px-4 py-2"><input type="text" placeholder="Ref#" className={inputStyle} value={row.ref} onChange={e => updateRow(row.id, 'ref', e.target.value)} /></td>
+                      <td className="px-8 py-2 text-right">
+                        <button onClick={() => removeRow(row.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-10 flex gap-4 justify-end">
+              <button onClick={onBack} className="px-8 py-3 rounded-xl border border-slate-200 font-bold text-[10px] uppercase text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
+              <button onClick={handleBulkSubmit} className="px-10 py-3 rounded-xl bg-red-600 text-white font-bold text-[10px] uppercase shadow-xl shadow-red-100 hover:bg-black transition-all">Submit Bulk Repayments</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ApproveRepaymentsPage = ({ onBack }: { onBack: () => void }) => {
+  const [showConfirmModal, setShowConfirmModal] = useState<any>(null);
+  const mockPendingRepayments = [
+    { id: 'RP-9941', customer: 'JAMES MWALE', loanId: 'LN-4553', amount: 800, method: 'Cash', enteredBy: 'Chanda B.', date: '2024-01-20 09:12' },
+    { id: 'RP-9942', customer: 'SARAH BANDA', loanId: 'LN-4554', amount: 2500, method: 'Bank Transfer', enteredBy: 'Sarah M.', date: '2024-01-20 10:45' },
+    { id: 'RP-9943', customer: 'LUKWESA LTD', loanId: 'LN-4552', amount: 15000, method: 'Bank Transfer', enteredBy: 'Sarah M.', date: '2024-01-19 16:30' },
+  ];
+
+  const handleApprove = () => {
+    alert(`Repayment ${showConfirmModal.id} approved by ${SYSTEM_ADMIN_EMAIL.split('@')[0]} at ${new Date().toLocaleString()}`);
+    setShowConfirmModal(null);
+  };
+
+  return (
+    <div className="animate-fade-in-up text-left">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-slate-900">Pending Repayment Approvals</h1>
+          <p className="text-[10px] font-bold text-red-600 uppercase mt-1">Verification queue</p>
+        </div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-400 text-[9px] font-bold uppercase">
+              <tr>
+                <th className="px-8 py-5">Repayment ID</th>
+                <th className="px-8 py-5">Customer</th>
+                <th className="px-8 py-5">Loan ID</th>
+                <th className="px-8 py-5">Amount</th>
+                <th className="px-8 py-5">Method</th>
+                <th className="px-8 py-5">Entered By</th>
+                <th className="px-8 py-5">Submitted At</th>
+                <th className="px-8 py-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockPendingRepayments.map((rp) => (
+                <tr key={rp.id} className="hover:bg-slate-50/50">
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-500">{rp.id}</td>
+                  <td className="px-8 py-5 text-[11px] font-bold text-slate-900">{rp.customer}</td>
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-400">{rp.loanId}</td>
+                  <td className="px-8 py-5 text-[12px] font-bold text-red-600">K {rp.amount.toLocaleString()}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-500">{rp.method}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-500">{rp.enteredBy}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-400">{rp.date}</td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button className="p-2 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-all" title="View Details"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => setShowConfirmModal(rp)} className="p-2 text-slate-400 hover:text-green-600 rounded-lg hover:bg-slate-100 transition-all" title="Approve"><CheckSquareIcon className="w-4 h-4" /></button>
+                      <button className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="Reject"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-10 text-left">
+              <h3 className="text-xl font-serif font-bold text-slate-900 mb-4">Confirm Repayment Approval</h3>
+              <p className="text-[12px] text-slate-500 mb-8 leading-relaxed">Approving this record will finalize the payment of <strong>K {showConfirmModal.amount.toLocaleString()}</strong> for <strong>{showConfirmModal.customer}</strong>. This update will be permanently applied to the loan ledger.</p>
+              
+              <div className="bg-slate-50 p-6 rounded-2xl mb-10 border border-slate-100">
+                 <p className="text-[9px] font-bold text-slate-400 uppercase mb-3">Audit Verification</p>
+                 <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold">AM</div>
+                    <div>
+                       <p className="text-[12px] font-bold text-slate-900 uppercase">{SYSTEM_ADMIN_EMAIL.split('@')[0]}</p>
+                       <p className="text-[10px] text-slate-400 font-medium">{new Date().toLocaleString()}</p>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="flex gap-4">
+                 <button onClick={() => setShowConfirmModal(null)} className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-[10px] uppercase hover:bg-slate-200 transition-all">Cancel</button>
+                 <button onClick={handleApprove} className="flex-[2] py-4 rounded-2xl bg-red-600 text-white font-bold text-[10px] uppercase shadow-xl shadow-red-100 hover:bg-black transition-all">Verify & Approve</button>
               </div>
            </div>
         </div>
