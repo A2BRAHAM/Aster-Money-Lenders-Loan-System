@@ -15,7 +15,8 @@ import {
   RotateCcw, Landmark, List, ClipboardCheck, ChevronUp, Paperclip, 
   Maximize2, StickyNote, Paperclip as PaperclipIcon, Layout, ExternalLink, File,
   Minimize2, Square, Printer as PrinterIcon, Minus, Copy, MessageSquare, Share2, Star,
-  Mail as MailIcon, ArrowDownAz, Settings2
+  Mail as MailIcon, ArrowDownAz, Settings2, SearchIcon, CalculatorIcon, CheckSquare, 
+  AlertOctagon, UserMinus, FileUp, Lock
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -157,10 +158,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const handleAction = (action: string) => {
     if (action === 'ReceivePayment') setShowPaymentWidget(true);
     else if (action === 'AddLoan' || action === 'CreateLoan') {
-      setEditingBorrower(null);
-      setCurrentView('AddBorrower');
+      setCurrentView('AddLoan');
     }
-    else if (action === 'ReviewLoanRequest' || action === 'ApproveLoan') setCurrentView('ViewAllLoans');
+    else if (action === 'ReviewLoanRequest' || action === 'ApproveLoan') setCurrentView('ApproveLoans');
     else if (action === 'ViewCustomersList') setCurrentView('ViewBorrowers');
     else if (action === 'RegisterCustomer') {
       setEditingBorrower(null);
@@ -190,6 +190,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (currentView === 'ViewBorrowers') return <BorrowerListPage onViewBorrower={handleViewBorrower} onEditBorrower={handleEditBorrower} onDeleteBorrower={handleDeleteBorrower} onBack={() => setCurrentView('overview')} />;
     if (currentView === 'borrower-profile' && selectedBorrower) return <BorrowerProfilePage borrower={selectedBorrower} onBack={() => setCurrentView('ViewBorrowers')} />;
     
+    // Loan Module Views
+    if (currentView === 'ViewAllLoans') return <ViewAllLoansPage onAction={handleAction} onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'AddLoan') return <AddLoanPage onBack={() => setCurrentView('ViewAllLoans')} />;
+    if (currentView === 'DueLoans') return <DueLoansPage onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'LoanCalculator') return <LoanCalculatorPage onBack={() => setCurrentView('overview')} />;
+    if (currentView === 'ApproveLoans') return <ApproveLoansPage onBack={() => setCurrentView('overview')} />;
+
     if (currentView === 'overview') {
       return (
         <div className="animate-fade-in space-y-8 text-left">
@@ -349,15 +356,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           ))}
         </nav>
       </aside>
-
-      <header className={`fixed top-0 right-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-8 transition-all duration-300 h-16 pt-0`} style={{ left: sidebarWidth === 'w-64' ? '16rem' : '5rem', marginTop: '4rem' }}>
-        <div className="flex items-center gap-6">
-          <button className="flex items-center gap-2 text-slate-400 hover:text-red-600 transition-colors group">
-            <Search className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase group-hover:text-red-600">Global Search</span>
-          </button>
-        </div>
-      </header>
 
       <main className={`flex-1 ${mainMargin} pt-36 pb-12 px-8 transition-all duration-300`}>
         <div className="max-w-7xl mx-auto">
@@ -890,7 +888,7 @@ const DocumentRow = ({ name, status }: { name: string, status: string }) => (
   </div>
 );
 
-// --- Rest of the sub-pages ---
+// --- Sub-Pages ---
 
 interface CustomField {
   id: string;
@@ -1437,6 +1435,491 @@ const AddBorrowerPage = ({ borrower, onBack }: { user: any, borrower: Borrower |
               <button onClick={addCustomField} disabled={!cfData.label || (cfData.isNewSection && !cfData.newSectionName)} className="flex-[2] py-4 rounded-2xl bg-red-600 text-white font-bold text-[10px] uppercase shadow-xl hover:bg-black transition-all disabled:opacity-50">Add to Form</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- LOAN MODULE PAGES ---
+
+const ViewAllLoansPage = ({ onAction, onBack }: { onAction: (a: string) => void, onBack: () => void }) => {
+  const mockLoans = [
+    { id: 'LN-4021', customer: 'ABINALA SICHALWE', amount: 15000, balance: 14250, start: '10/01/2024', due: '10/02/2024', status: 'Active' },
+    { id: 'LN-3892', customer: 'ABRAHAM MUTWALE', amount: 5000, balance: 0, start: '15/10/2023', due: '15/04/2024', status: 'Closed' },
+    { id: 'LN-4105', customer: 'MOSES MULENGA', amount: 12000, balance: 12000, start: '01/02/2024', due: '01/03/2024', status: 'Due Soon' },
+    { id: 'LN-3990', customer: 'AGNESS CHAMA', amount: 25000, balance: 22000, start: '20/12/2023', due: '20/01/2024', status: 'Overdue' },
+  ];
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'Active': return 'bg-green-50 text-green-600';
+      case 'Due Soon': return 'bg-yellow-50 text-yellow-600';
+      case 'Overdue': return 'bg-red-50 text-red-600';
+      default: return 'bg-slate-50 text-slate-400';
+    }
+  };
+
+  return (
+    <div className="animate-fade-in-up text-left">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-serif font-bold text-slate-900">All Loans Portfolio</h1>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+           <div className="relative flex-1 max-w-sm">
+              <input type="text" placeholder="Search Loan ID, Customer..." className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border-none text-[12px] outline-none" />
+              <SearchIcon className="w-4 h-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+           </div>
+           <button onClick={() => onAction('AddLoan')} className="px-5 py-2 bg-red-600 text-white rounded-xl font-bold text-[10px] uppercase flex items-center gap-2"><Plus className="w-3 h-3" /> Add Loan</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-slate-400 text-[9px] font-bold uppercase">
+              <tr>
+                <th className="px-8 py-4">Loan ID</th>
+                <th className="px-8 py-4">Customer</th>
+                <th className="px-8 py-4">Amount</th>
+                <th className="px-8 py-4">Balance</th>
+                <th className="px-8 py-4">Start</th>
+                <th className="px-8 py-4">Due</th>
+                <th className="px-8 py-4">Status</th>
+                <th className="px-8 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockLoans.map((loan) => (
+                <tr key={loan.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-8 py-4 text-[11px] font-mono text-slate-500">{loan.id}</td>
+                  <td className="px-8 py-4 text-[11px] font-bold text-slate-900">{loan.customer}</td>
+                  <td className="px-8 py-4 text-[12px] text-slate-600">K {loan.amount.toLocaleString()}</td>
+                  <td className="px-8 py-4 text-[12px] font-bold text-red-600">K {loan.balance.toLocaleString()}</td>
+                  <td className="px-8 py-4 text-[11px] text-slate-500">{loan.start}</td>
+                  <td className="px-8 py-4 text-[11px] text-slate-500">{loan.due}</td>
+                  <td className="px-8 py-4">
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${getStatusStyle(loan.status)}`}>{loan.status}</span>
+                  </td>
+                  <td className="px-8 py-4 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="View Loan"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => onAction('ReceivePayment')} className="p-1.5 text-slate-400 hover:text-green-600 rounded-lg hover:bg-slate-100 transition-all" title="Receive Payment"><DollarSign className="w-4 h-4" /></button>
+                      <button className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-all" title="Reschedule"><Calendar className="w-4 h-4" /></button>
+                      <button className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="Close Loan"><Ban className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddLoanPage = ({ onBack }: { onBack: () => void }) => {
+  const [amount, setAmount] = useState('');
+  const [rate, setRate] = useState('15');
+  const [term, setTerm] = useState('1');
+  const [frequency, setFrequency] = useState('monthly');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+
+  const mockCustomers = [
+    { id: 'CUST-1001', name: 'ABINALA SICHALWE', nrc: '456789/11/1', phone: '0770535221' },
+    { id: 'CUST-1002', name: 'ABRAHAM MUTWALE', nrc: '123456/10/1', phone: '0973358899' },
+  ];
+
+  const summary = useMemo(() => {
+    const p = parseFloat(amount) || 0;
+    const r = parseFloat(rate) || 0;
+    const t = parseInt(term) || 0;
+    const totalInterest = p * (r / 100) * (t / 12);
+    const totalPayable = p + totalInterest;
+    
+    let installmentsCount = t;
+    if (frequency === 'weekly') installmentsCount = t * 4;
+    if (frequency === 'bi-weekly') installmentsCount = t * 2;
+    
+    const installment = installmentsCount > 0 ? totalPayable / installmentsCount : 0;
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + t);
+
+    return { totalInterest, totalPayable, installment, endDate: endDate.toLocaleDateString() };
+  }, [amount, rate, term, frequency]);
+
+  const inputStyle = "w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none text-slate-400 font-normal placeholder:text-slate-300";
+  const labelStyle = "text-[10px] font-bold uppercase text-black mb-1.5 block";
+  const readOnlyStyle = "w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 text-[13px] text-slate-400 font-normal cursor-not-allowed";
+
+  return (
+    <div className="animate-fade-in-up text-left max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-serif font-bold text-slate-900">New Loan Application</h1>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="space-y-8">
+        {/* Borrower Info Card */}
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+          <h3 className="text-[11px] font-bold uppercase text-red-600 mb-6 flex items-center gap-2"><User className="w-3 h-3" /> Borrower Information</h3>
+          <div className="space-y-6">
+            <div className="relative">
+              <label className={labelStyle}>Search Customer</label>
+              <input 
+                type="text" 
+                placeholder="Name, Phone, or ID..." 
+                className={inputStyle}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && !selectedCustomer && (
+                <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl mt-1 shadow-xl z-10 overflow-hidden">
+                  {mockCustomers.map(c => (
+                    <button key={c.id} onClick={() => { setSelectedCustomer(c); setSearchQuery(''); }} className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[12px] font-bold border-b last:border-0">{c.name} ({c.id})</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedCustomer && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-fade-in">
+                <div><label className={labelStyle}>Full Name</label><div className={readOnlyStyle}>{selectedCustomer.name}</div></div>
+                <div><label className={labelStyle}>Customer ID</label><div className={readOnlyStyle}>{selectedCustomer.id}</div></div>
+                <div><label className={labelStyle}>NRC / ID</label><div className={readOnlyStyle}>{selectedCustomer.nrc}</div></div>
+                <div><label className={labelStyle}>Phone Number</label><div className={readOnlyStyle}>{selectedCustomer.phone}</div></div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Loan Details Card */}
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+          <h3 className="text-[11px] font-bold uppercase text-red-600 mb-6 flex items-center gap-2"><Briefcase className="w-3 h-3" /> Loan Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div>
+              <label className={labelStyle}>Loan Amount (ZMW)</label>
+              <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-red-600">
+                <span className="px-3 bg-slate-50 flex items-center text-[12px] text-slate-400 border-r border-slate-200">K</span>
+                <input type="number" step="0.01" className="w-full px-3 py-3 text-[13px] outline-none text-slate-400 font-normal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className={labelStyle}>Loan Type</label>
+              <select className={inputStyle}>
+                <option>Personal Loan</option>
+                <option>Business Loan</option>
+                <option>Salaried Loan</option>
+                <option>Collateral Loan</option>
+              </select>
+            </div>
+            <div className="md:col-span-2 lg:col-span-1">
+              <label className={labelStyle}>Loan Purpose</label>
+              <input type="text" className={inputStyle} placeholder="e.g. Medical, Scaling Business" />
+            </div>
+            <div>
+              <label className={labelStyle}>Loan Term (Months)</label>
+              <select className={inputStyle} value={term} onChange={(e) => setTerm(e.target.value)}>
+                {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m} Month{m > 1 ? 's' : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelStyle}>Interest Rate (%)</label>
+              <input type="number" className={inputStyle} value={rate} onChange={(e) => setRate(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelStyle}>Repayment Frequency</label>
+              <select className={inputStyle} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+                <option value="weekly">Weekly</option>
+                <option value="bi-weekly">Bi-weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelStyle}>Start Date</label>
+              <input type="date" className={inputStyle} min={new Date().toISOString().split('T')[0]} />
+            </div>
+          </div>
+        </div>
+
+        {/* Repayment Summary */}
+        <div className="bg-slate-900 p-8 rounded-[2rem] text-white">
+          <h3 className="text-[11px] font-bold uppercase text-red-500 mb-6">Repayment Summary</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div><p className="text-[9px] font-bold uppercase text-slate-500 mb-1">Total Interest</p><p className="text-xl font-bold">K {summary.totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+            <div><p className="text-[9px] font-bold uppercase text-slate-500 mb-1">Total Payable</p><p className="text-xl font-bold text-red-500">K {summary.totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+            <div><p className="text-[9px] font-bold uppercase text-slate-500 mb-1">Installment Amount</p><p className="text-xl font-bold">K {summary.installment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+            <div><p className="text-[9px] font-bold uppercase text-slate-500 mb-1">Loan End Date</p><p className="text-xl font-bold">{summary.endDate}</p></div>
+          </div>
+        </div>
+
+        {/* Collateral (Optional) */}
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+           <h3 className="text-[11px] font-bold uppercase text-slate-400 mb-6 flex items-center gap-2"><Lock className="w-3 h-3" /> Collateral Information (Optional)</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div><label className={labelStyle}>Collateral Type</label><input type="text" className={inputStyle} placeholder="e.g. Vehicle, Property" /></div>
+              <div><label className={labelStyle}>Estimated Value</label><input type="number" className={inputStyle} placeholder="K 0.00" /></div>
+              <div className="md:col-span-2">
+                <label className={labelStyle}>Upload Document</label>
+                <div className="border-2 border-dashed border-slate-100 rounded-xl p-6 text-center hover:border-red-600 transition-colors group cursor-pointer">
+                  <FileUp className="w-8 h-8 text-slate-200 mx-auto mb-2 group-hover:text-red-600" />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Click to browse or drop file</p>
+                </div>
+              </div>
+           </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-end pt-8">
+          <button onClick={onBack} className="px-10 py-4 rounded-2xl bg-white border border-slate-200 font-bold text-[10px] uppercase text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
+          <button className="px-10 py-4 rounded-2xl bg-white border border-slate-900 font-bold text-[10px] uppercase text-slate-900 hover:bg-slate-900 hover:text-white transition-all">Save as Draft</button>
+          <button onClick={() => { if(!selectedCustomer) return alert('Select a customer first'); alert('Application submitted successfully'); onBack(); }} className="px-10 py-4 rounded-2xl bg-red-600 font-bold text-[10px] uppercase text-white hover:bg-black shadow-xl shadow-red-200 transition-all">Submit Loan Application</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DueLoansPage = ({ onBack }: { onBack: () => void }) => {
+  const mockDue = [
+    { customer: 'MOSES MULENGA', id: 'LN-4105', days: 0, balance: 12000, risk: 'Low' },
+    { customer: 'AGNESS CHAMA', id: 'LN-3990', days: 12, balance: 22000, risk: 'High' },
+    { customer: 'JOHN PHIRI', id: 'LN-4221', days: 5, balance: 4500, risk: 'Medium' },
+  ];
+
+  return (
+    <div className="animate-fade-in-up text-left">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-slate-900">Due & Overdue Loans</h1>
+          <p className="text-[10px] font-bold text-red-600 uppercase mt-1">Real-time collections monitor</p>
+        </div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-8 bg-red-50/30 border-b border-slate-100">
+           <p className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-2"><AlertOctagon className="w-4 h-4 text-red-600" /> These loans require immediate attention to maintain portfolio quality.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-400 text-[9px] font-bold uppercase">
+              <tr>
+                <th className="px-8 py-5">Customer</th>
+                <th className="px-8 py-5">Loan ID</th>
+                <th className="px-8 py-5">Days Overdue</th>
+                <th className="px-8 py-5">Balance</th>
+                <th className="px-8 py-5">Risk Level</th>
+                <th className="px-8 py-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockDue.map((loan, idx) => (
+                <tr key={idx} className="hover:bg-slate-50/50">
+                  <td className="px-8 py-5 text-[11px] font-bold text-slate-900">{loan.customer}</td>
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-500">{loan.id}</td>
+                  <td className="px-8 py-5">
+                    <span className={`text-[11px] font-black ${loan.days > 0 ? 'text-red-600' : 'text-slate-400'}`}>{loan.days} Days</span>
+                  </td>
+                  <td className="px-8 py-5 text-[12px] font-bold text-red-600">K {loan.balance.toLocaleString()}</td>
+                  <td className="px-8 py-5">
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                      loan.risk === 'High' ? 'bg-red-50 text-red-600' : loan.risk === 'Medium' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                    }`}>{loan.risk} Risk</span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-2">
+                       <button className="p-2 text-slate-400 hover:text-green-600 rounded-lg hover:bg-slate-100 transition-all" title="Receive Payment"><DollarSign className="w-4 h-4" /></button>
+                       <button className="p-2 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-all" title="Send Reminder"><Bell className="w-4 h-4" /></button>
+                       <button className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="Apply Penalty"><Minus className="w-4 h-4" /></button>
+                       <button className="p-2 text-slate-400 hover:text-red-900 rounded-lg hover:bg-slate-100 transition-all" title="Flag Defaulter"><UserMinus className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LoanCalculatorPage = ({ onBack }: { onBack: () => void }) => {
+  const [amount, setAmount] = useState('10000');
+  const [rate, setRate] = useState('15');
+  const [term, setTerm] = useState('12');
+  const [frequency, setFrequency] = useState('monthly');
+
+  const calc = useMemo(() => {
+    const p = parseFloat(amount) || 0;
+    const r = parseFloat(rate) || 0;
+    const t = parseInt(term) || 0;
+    const totalInterest = p * (r / 100) * (t / 12);
+    const totalPayable = p + totalInterest;
+    
+    let installmentsCount = t;
+    if (frequency === 'weekly') installmentsCount = t * 4;
+    if (frequency === 'bi-weekly') installmentsCount = t * 2;
+    
+    const installment = installmentsCount > 0 ? totalPayable / installmentsCount : 0;
+    return { totalInterest, totalPayable, installment };
+  }, [amount, rate, term, frequency]);
+
+  const labelStyle = "text-[10px] font-bold uppercase text-black mb-1.5 block";
+  const inputStyle = "w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none text-slate-400 font-normal";
+
+  return (
+    <div className="animate-fade-in-up text-left max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-serif font-bold text-slate-900">Loan Calculator</h1>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="grid md:grid-cols-12 gap-8">
+        <div className="md:col-span-5 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+           <h3 className="text-[11px] font-bold uppercase text-slate-400 mb-2">Calculator Inputs</h3>
+           <div>
+             <label className={labelStyle}>Loan Amount (K)</label>
+             <input type="number" className={inputStyle} value={amount} onChange={(e) => setAmount(e.target.value)} />
+           </div>
+           <div>
+             <label className={labelStyle}>Annual Interest Rate (%)</label>
+             <input type="number" className={inputStyle} value={rate} onChange={(e) => setRate(e.target.value)} />
+           </div>
+           <div>
+             <label className={labelStyle}>Term (Months)</label>
+             <input type="number" className={inputStyle} value={term} onChange={(e) => setTerm(e.target.value)} />
+           </div>
+           <div>
+             <label className={labelStyle}>Repayment Frequency</label>
+             <select className={inputStyle} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+                <option value="weekly">Weekly</option>
+                <option value="bi-weekly">Bi-weekly</option>
+                <option value="monthly">Monthly</option>
+             </select>
+           </div>
+           <div className="pt-4 grid grid-cols-2 gap-4">
+              <button onClick={() => { setAmount('10000'); setRate('15'); setTerm('12'); setFrequency('monthly'); }} className="py-3 rounded-xl border border-slate-100 font-bold text-[10px] uppercase text-slate-400 hover:bg-slate-50 transition-all">Reset</button>
+              <button className="py-3 rounded-xl bg-slate-900 text-white font-bold text-[10px] uppercase hover:bg-black transition-all">Calculate</button>
+           </div>
+        </div>
+
+        <div className="md:col-span-7 bg-red-600 p-10 rounded-[2.5rem] shadow-xl text-white flex flex-col justify-between">
+           <div>
+             <h3 className="text-[10px] font-bold uppercase text-white/60 mb-10 tracking-[0.2em]">Estimated Loan Repayments</h3>
+             <div className="space-y-10">
+                <div className="flex items-center justify-between border-b border-white/10 pb-6">
+                   <div><p className="text-[9px] font-bold uppercase text-white/50 mb-1">Total Payable Amount</p><p className="text-4xl font-serif font-black">K {calc.totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                   <div className="text-right text-white/40"><DollarSign className="w-10 h-10" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-10">
+                   <div><p className="text-[9px] font-bold uppercase text-white/50 mb-1">Installment Amount</p><p className="text-2xl font-bold">K {calc.installment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                   <div><p className="text-[9px] font-bold uppercase text-white/50 mb-1">Total Interest</p><p className="text-2xl font-bold">K {calc.totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                </div>
+             </div>
+           </div>
+           <div className="mt-12 p-6 bg-black/10 rounded-2xl border border-white/5">
+              <p className="text-[10px] font-medium leading-relaxed opacity-80">Disclaimer: This calculator provides an estimation only. Final loan terms, interest rates, and fees will be determined at the time of official application and approval.</p>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ApproveLoansPage = ({ onBack }: { onBack: () => void }) => {
+  const [showApprovalModal, setShowApprovalModal] = useState<any>(null);
+  const mockPending = [
+    { id: 'LN-4552', customer: 'LUKWESA LTD', amount: 85000, term: 24, risk: 85, status: 'Pending Approval' },
+    { id: 'LN-4553', customer: 'JAMES MWALE', amount: 3500, term: 6, risk: 32, status: 'Pending Approval' },
+    { id: 'LN-4554', customer: 'SARAH BANDA', amount: 15000, term: 12, risk: 58, status: 'Pending Approval' },
+  ];
+
+  const handleApprove = () => {
+    alert(`Loan ${showApprovalModal.id} has been approved by ${SYSTEM_ADMIN_EMAIL.split('@')[0]} at ${new Date().toLocaleString()}`);
+    setShowApprovalModal(null);
+  };
+
+  return (
+    <div className="animate-fade-in-up text-left">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-slate-900">Pending Loan Approvals</h1>
+          <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Management override required</p>
+        </div>
+        <button onClick={onBack} className="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-400 text-[9px] font-bold uppercase">
+              <tr>
+                <th className="px-8 py-5">Loan ID</th>
+                <th className="px-8 py-5">Customer</th>
+                <th className="px-8 py-5">Requested Amount</th>
+                <th className="px-8 py-5">Term</th>
+                <th className="px-8 py-5">Risk Score</th>
+                <th className="px-8 py-5">Status</th>
+                <th className="px-8 py-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {mockPending.map((loan) => (
+                <tr key={loan.id} className="hover:bg-slate-50/50">
+                  <td className="px-8 py-5 text-[11px] font-mono text-slate-500">{loan.id}</td>
+                  <td className="px-8 py-5 text-[11px] font-bold text-slate-900">{loan.customer}</td>
+                  <td className="px-8 py-5 text-[12px] font-black text-slate-900">K {loan.amount.toLocaleString()}</td>
+                  <td className="px-8 py-5 text-[11px] text-slate-500">{loan.term} Months</td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2">
+                       <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${loan.risk > 70 ? 'bg-red-500' : loan.risk > 40 ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${loan.risk}%` }}></div>
+                       </div>
+                       <span className="text-[10px] font-bold text-slate-500">{loan.risk}%</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-yellow-50 text-yellow-600">Pending</span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-1">
+                       <button className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="View Application"><FileText className="w-4 h-4" /></button>
+                       <button onClick={() => setShowApprovalModal(loan)} className="p-2 text-slate-400 hover:text-green-600 rounded-lg hover:bg-slate-100 transition-all" title="Approve"><CheckSquare className="w-4 h-4" /></button>
+                       <button className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-all" title="Reject"><X className="w-4 h-4" /></button>
+                       <button className="p-2 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-all" title="Request Info"><Info className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showApprovalModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+           <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden p-10 text-left">
+              <h3 className="text-xl font-serif font-bold text-slate-900 mb-4">Confirm Loan Approval</h3>
+              <p className="text-[12px] text-slate-500 mb-8 leading-relaxed">You are about to approve <strong>{showApprovalModal.id}</strong> for <strong>{showApprovalModal.customer}</strong> in the amount of <strong>K {showApprovalModal.amount.toLocaleString()}</strong>. This action will disburse funds if automated.</p>
+              
+              <div className="bg-slate-50 p-4 rounded-xl mb-10 border border-slate-100">
+                 <p className="text-[9px] font-bold text-slate-400 uppercase mb-2">Logged Approver</p>
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-xs">AM</div>
+                    <div>
+                       <p className="text-[12px] font-bold text-slate-900">{SYSTEM_ADMIN_EMAIL.split('@')[0].toUpperCase()}</p>
+                       <p className="text-[9px] text-slate-400 uppercase font-medium">{new Date().toLocaleString()}</p>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="flex gap-4">
+                 <button onClick={() => setShowApprovalModal(null)} className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-[10px] uppercase hover:bg-slate-200 transition-all">Cancel</button>
+                 <button onClick={handleApprove} className="flex-[2] py-4 rounded-2xl bg-red-600 text-white font-bold text-[10px] uppercase shadow-xl shadow-red-200 hover:bg-black transition-all">Confirm Approval</button>
+              </div>
+           </div>
         </div>
       )}
     </div>

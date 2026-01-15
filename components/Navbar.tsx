@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, Search } from 'lucide-react';
 import { BRAND_COLORS } from '../constants';
 import { supabase } from '../lib/supabase';
 import { AppView } from '../App';
@@ -22,6 +21,8 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, user, view, o
   };
 
   const isNavSolid = isScrolled || view !== 'landing';
+  const isEmployee = user?.user_metadata?.role === 'employer' || user?.email === 'abrahamgmutwale@gmail.com';
+  const showSearch = isEmployee && view === 'dashboard';
 
   const navLinks = [
     { label: 'Home', view: 'landing' as AppView, sectionId: 'home' },
@@ -81,6 +82,12 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLoginClick, user, view, o
             )}
             
             <div className="flex items-center ml-8">
+              {showSearch && (
+                <button className="flex items-center gap-2 text-white/80 hover:text-white transition-all group mr-10 print:hidden">
+                  <Search className="w-4 h-4" />
+                  <span className="text-[10px] font-bold uppercase">Global Search</span>
+                </button>
+              )}
               {user ? (
                 <div className="flex items-center space-x-4">
                   <button 
